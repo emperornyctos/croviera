@@ -10,6 +10,9 @@ croviera is what happens when someone looks at a music player and thinks
 "what if theres a music player that... plays music i guess, and also what if it was held
 together by hope and gradle". it plays music. it also plays with your patience.
 
+# screenshot or sm?????
+<img width="246" height="550" alt="Screenshot_2026-11-03-20-29-17-04_ced7f87d148198a9a5d73debfbcaaa47" src="https://github.com/user-attachments/assets/53c26346-7fc9-46ea-8e88-c07042ffa099" />
+
 ---
 
 ## the honest disclaimer
@@ -17,7 +20,7 @@ together by hope and gradle". it plays music. it also plays with your patience.
 this is a horrible project. it is a vibecoded mess. i am aware of this.
 i have made peace with this. (´･ω･`)
 
-it started as a prototype, got out of hand, and is now a full app with a
+it started as a prototype, got out of hand, and is now a ~~full~~ app with a
 rebrand and a version number that finally starts at 1.0. please do not look
 at the commit history. please do look at the settings menu because i think its also a mess. (￣▽￣)ゞ
 
