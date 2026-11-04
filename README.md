@@ -19,7 +19,7 @@ i have made peace with this. (´･ω･`)
 
 it started as a prototype, got out of hand, and is now a full app with a
 rebrand and a version number that finally starts at 1.0. please do not look
-at the commit history. please do look at the settings menu. (￣▽￣)ゞ
+at the commit history. please do look at the settings menu because i think its also a mess. (￣▽￣)ゞ
 
 if something breaks, it is probably a feature. if it works, it is definitely
 an accident. (╯°□°)╯︵ ┻━┻
