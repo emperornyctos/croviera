@@ -4,10 +4,10 @@
 the only tester for this app is my girlfriend. shoutout to her. i love you.
 ```
 
-a local-first android music player with a terminal soul and an amoled problem.
+a local-first android music player with a terminal soul and an amoled problem. (i think)
 
 croviera is what happens when someone looks at a music player and thinks
-"what if every single pixel was configurable, and also what if it was held
+"what if theres a music player that... plays music i guess, and also what if it was held
 together by hope and gradle". it plays music. it also plays with your patience.
 
 ---
@@ -41,7 +41,7 @@ an accident. (╯°□°)╯︵ ┻━┻
 
 ## customization (yes, all of it)
 
-the settings screen is less of a settings screen and more of a warning label.
+wallahi you can do this (more coming soon).
 
 - move the top buttons to the top, bottom, left, or right
 - rename every button and give it a nerd font glyph
@@ -93,3 +93,7 @@ the apk lands in `app/build/outputs/apk/release/`.
 ## license
 
 mit. take it, change it, break it, fix it. just do not blame me. (´；ω；`)
+
+```
+please give me the bodypop vinyl i want it and it will be mine please
+```
