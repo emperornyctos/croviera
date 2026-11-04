@@ -1,4 +1,4 @@
-package com.physic.music
+package com.croviera.music
 
 import android.content.Context
 import kotlinx.coroutines.flow.firstOrNull
@@ -7,7 +7,7 @@ import java.util.Locale
 object L {
     // language code -> (english -> translation)
     private val es = mapOf(
-        "welcome to Physic" to "folleto de Physic",
+        "welcome to croviera" to "folleto de Croviera",
         "you can change all of this later in ~/settings" to "puedes cambiar todo esto despues en ~/settings",
         "profile" to "perfil", "theme" to "tema", "font" to "fuente",
         "corners" to "esquinas", "index folders" to "indexar carpetas", "about" to "acerca de",
@@ -31,11 +31,11 @@ object L {
         "[delete]" to "[borrar]", "[ shuffle all ]" to "[ aleatorio ]", "lyrics" to "letras",
         "no .lrc sidecar found for this song" to "no se encontro .lrc", "sort:" to "ordenar",
         "rounded on" to "redondeado activado", "square (default)" to "cuadrado (por defecto)",
-        "about" to "acerca de", "github.com/Tolepi/physic" to "github.com/Tolepi/physic",
+        "about" to "acerca de", "github.com/emperornyctos/croviera" to "github.com/emperornyctos/croviera",
         "vibecoded with love" to "viberan xq con amor",
     )
     private val fr = mapOf(
-        "welcome to Physic" to "bienvenue sur Physic",
+        "welcome to croviera" to "bienvenue sur Croviera",
         "you can change all of this later in ~/settings" to "tu peux tout changer dans ~/settings",
         "profile" to "profil", "theme" to "theme", "font" to "police",
         "corners" to "coins", "index folders" to "indexer les dossiers", "about" to "a propos",
@@ -46,7 +46,7 @@ object L {
         "most played songs" to "plus jouees", "top albums" to "top albums", "top artists" to "top artistes",
     )
     private val de = mapOf(
-        "welcome to Physic" to "Willkommen bei Physic",
+        "welcome to croviera" to "Willkommen bei Croviera",
         "you can change all of this later in ~/settings" to "alles spater in ~/settings anderbar",
         "profile" to "Profil", "theme" to "Thema", "font" to "Schriftart",
         "corners" to "Ecken", "index folders" to "Ordner indexieren", "about" to "uber",
@@ -57,7 +57,7 @@ object L {
         "most played songs" to "meiste wiedergabe", "top albums" to "top alben", "top artists" to "top konkurrenz",
     )
     private val ja = mapOf(
-        "welcome to Physic" to "Physicへようこそ",
+        "welcome to croviera" to "Crovieraへようこそ",
         "you can change all of this later in ~/settings" to "あとで~/settingsで変更できます",
         "profile" to "プロフィール", "theme" to "テーマ", "font" to "フォント",
         "corners" to "角", "index folders" to "フォルダを登録", "about" to "概要",
@@ -68,7 +68,7 @@ object L {
         "most played songs" to "再生上位", "top albums" to "人気アルバム", "top artists" to "人気アーティスト",
     )
     private val zh = mapOf(
-        "welcome to Physic" to "欢迎使用 Physic",
+        "welcome to croviera" to "欢迎使用 Croviera",
         "you can change all of this later in ~/settings" to "您可以稍后在 ~/settings 中修改",
         "profile" to "个人资料", "theme" to "主题", "font" to "字体",
         "corners" to "圆角", "index folders" to "索引文件夹", "about" to "关于",
@@ -79,7 +79,7 @@ object L {
         "most played songs" to "最常播放", "top albums" to "热门专辑", "top artists" to "热门艺术家",
     )
     private val it = mapOf(
-        "welcome to Physic" to "Benvenuto in Physic",
+        "welcome to croviera" to "Benvenuto in Croviera",
         "you can change all of this later in ~/settings" to "puoi cambiare tutto in ~/settings",
         "profile" to "profilo", "theme" to "tema", "font" to "carattere",
         "corners" to "angoli", "index folders" to "indicizza cartelle", "about" to "info",
@@ -89,7 +89,7 @@ object L {
         "most played songs" to "piu riprodotte", "top albums" to "top album", "top artists" to "top artisti",
     )
     private val pt = mapOf(
-        "welcome to Physic" to "Bem-vindo ao Physic",
+        "welcome to croviera" to "Bem-vindo ao Croviera",
         "you can change all of this later in ~/settings" to "voce pode mudar tudo em ~/settings",
         "profile" to "perfil", "theme" to "tema", "font" to "fonte",
         "corners" to "cantos", "index folders" to "indexar pastas", "about" to "sobre",
@@ -99,7 +99,7 @@ object L {
         "most played songs" to "mais tocadas", "top albums" to "top albuns", "top artists" to "top artistas",
     )
     private val ru = mapOf(
-        "welcome to Physic" to "Добро пожаловать в Physic",
+        "welcome to croviera" to "Добро пожаловать в Croviera",
         "you can change all of this later in ~/settings" to "потом в ~/settings",
         "profile" to "профиль", "theme" to "тема", "font" to "шрифт",
         "corners" to "углы", "index folders" to "индексировать папки", "about" to "о программе",
@@ -109,7 +109,7 @@ object L {
         "most played songs" to "самые частые", "top albums" to "топ альбомы", "top artists" to "топ артисты",
     )
     private val ko = mapOf(
-        "welcome to Physic" to "Physic에 오신 것을 환영합니다",
+        "welcome to croviera" to "Croviera에 오신 것을 환영합니다",
         "you can change all of this later in ~/settings" to "~/settings에서 변경 가능",
         "profile" to "프로필", "theme" to "테마", "font" to "글꼴",
         "corners" to "모서리", "index folders" to "폴더 색인", "about" to "정보",
@@ -119,7 +119,7 @@ object L {
         "most played songs" to "많이 재생", "top albums" to "인기 앨범", "top artists" to "인기 아티스트",
     )
     private val ar = mapOf(
-        "welcome to Physic" to "مرحباً بك في Physic",
+        "welcome to croviera" to "مرحباً بك في Croviera",
         "you can change all of this later in ~/settings" to "يمكنك التغيير لاحقاً",
         "profile" to "الملف الشخصي", "theme" to "السمة", "font" to "الخط",
         "corners" to "الزوايا", "index folders" to "فهرسة المجلدات", "about" to "حول",

@@ -1,4 +1,4 @@
-package com.physic.music
+package com.croviera.music
 
 import android.media.audiofx.Equalizer
 import androidx.compose.foundation.layout.*
@@ -62,7 +62,7 @@ fun EqualizerTab(theme: ThemeColors) {
 
     DisposableEffect(Unit) { onDispose { eq?.release() } }
 
-    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Panel("equalizer", theme, shape = RoundedCornerShape(0.dp)) {
             if (player == null) {
                 Text(L.tr(LocalContext.current, "play something first"), color = theme.subtext)

@@ -1,4 +1,4 @@
-package com.physic.music
+package com.croviera.music
 
 import android.content.ContentUris
 import android.content.Context
@@ -18,7 +18,10 @@ data class Song(
     val year: String = "",
     val track: Int = 0,
     val coverOverride: String? = null,
-)
+) {
+    /** Stable key for metadata/lyrics, even on devices where DATA is hidden. */
+    val metaKey: String get() = path.ifBlank { uri.toString() }
+}
 
 object MusicIndex {
     /** bump to force the UI to re-scan the media store (after metadata edits/deletes) */
@@ -94,13 +97,15 @@ object MusicIndex {
                 if (!match) continue
                 val id = cur.getLong(0)
                 val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                val path = cur.getString(4) ?: ""
+                val metaKey = path.ifBlank { uri.toString() }
                 out.add(
                     Meta.apply(c, Song(
                         id, cur.getString(1) ?: "?", cur.getString(2) ?: "?",
-                        cur.getString(3) ?: "?", cur.getLong(7), uri, cur.getString(4) ?: "", cur.getLong(5),
+                        cur.getString(3) ?: "?", cur.getLong(7), uri, path, cur.getLong(5),
                         cur.getLong(8), (cur.getLong(9)).let { if (it in 1L..9999L) it.toString() else "" },
                         cur.getInt(10),
-                        Meta.get(c, cur.getString(4) ?: "")?.optString("cover", "")?.ifEmpty { null },
+                        Meta.get(c, metaKey)?.optString("cover", "")?.ifEmpty { null },
                     ) )
                 )
             }

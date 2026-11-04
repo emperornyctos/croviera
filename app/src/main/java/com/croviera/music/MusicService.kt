@@ -1,4 +1,4 @@
-package com.physic.music
+package com.croviera.music
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -30,6 +30,7 @@ class MusicService : MediaSessionService() {
 
     companion object {
         private const val NOTY_ID = 1
+        // Legacy id keeps the user's existing notification-channel settings.
         private const val CHANNEL_ID = "physic"
     }
 

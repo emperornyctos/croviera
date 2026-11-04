@@ -1,4 +1,4 @@
-package com.physic.music
+package com.croviera.music
 
 import android.content.Context
 import org.json.JSONObject
@@ -13,7 +13,7 @@ object Meta {
 
     fun get(c: Context, path: String): JSONObject? = load(c).optJSONObject(path)
 
-    fun set(c: Context, path: String, title: String?, artist: String?, album: String?, year: String?, track: String?, cover: String?) {
+    fun set(c: Context, path: String, title: String?, artist: String?, album: String?, year: String?, track: String?, cover: String?, lrc: String? = null) {
         val j = load(c)
         val o = j.optJSONObject(path) ?: JSONObject()
         if (!title.isNullOrBlank()) o.put("title", title)
@@ -22,12 +22,15 @@ object Meta {
         if (!year.isNullOrBlank()) o.put("year", year)
         if (!track.isNullOrBlank()) o.put("track", track)
         if (!cover.isNullOrBlank()) o.put("cover", cover)
+        if (lrc != null) {
+            if (lrc.isBlank()) o.remove("lrc") else o.put("lrc", lrc)
+        }
         j.put(path, o)
         save(c, j)
     }
 
     fun apply(c: Context, song: Song): Song {
-        val o = get(c, song.path) ?: return song
+        val o = get(c, song.metaKey) ?: return song
         return song.copy(
             title = o.optString("title", song.title),
             artist = o.optString("artist", song.artist),

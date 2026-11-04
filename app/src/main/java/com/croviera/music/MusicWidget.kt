@@ -1,4 +1,4 @@
-package com.physic.music
+package com.croviera.music
 
 import android.content.Context
 import android.content.Intent
@@ -131,6 +131,6 @@ class MusicWidget : GlanceAppWidget() {
     }
 }
 
-class MusicWidgetReceiver : GlanceAppWidgetReceiver() {
+open class MusicWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = MusicWidget()
 }

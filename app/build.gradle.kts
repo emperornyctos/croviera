@@ -4,14 +4,17 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 android {
-    namespace = "com.physic.music"
+    namespace = "com.croviera.music"
     compileSdk = 34
     defaultConfig {
+        // Keep the original application id so this installs as an in-place
+        // update and keeps playlists, stats, settings, covers, fonts and lyrics.
         applicationId = "com.physic.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 161
-        versionName = "1.6.0"
+        // Must stay above the last Physic build (161) or Android refuses the update.
+        versionCode = 162
+        versionName = "1.0"
     }
     signingConfigs {
         create("release") {

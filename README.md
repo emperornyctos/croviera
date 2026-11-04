@@ -1,108 +1,95 @@
-# Physic
+# croviera
 
 ```
-The only tester for this app is my girlfriend. Shoutout to her. I love you.
+the only tester for this app is my girlfriend. shoutout to her. i love you.
 ```
 
-A local-first Android music player with a TUI soul.
+a local-first android music player with a terminal soul and an amoled problem.
+
+croviera is what happens when someone looks at a music player and thinks
+"what if every single pixel was configurable, and also what if it was held
+together by hope and gradle". it plays music. it also plays with your patience.
 
 ---
 
-## ⚠️ DISCLAIMER ⚠️
+## the honest disclaimer
 
-**THIS THING IS VIBECODED. I'M SO SORRY EVERYONE, I'LL DO BETTER. 3: (btw the readme is also vibecoded lmfao)**
+this is a horrible project. it is a vibecoded mess. i am aware of this.
+i have made peace with this. (´･ω･`)
 
----
+it started as a prototype, got out of hand, and is now a full app with a
+rebrand and a version number that finally starts at 1.0. please do not look
+at the commit history. please do look at the settings menu. (￣▽￣)ゞ
 
-[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org)
-[![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-2024-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![Media3](https://img.shields.io/badge/Media3-1.4-3DDC84?style=for-the-badge&logo=android&logoColor=black)](https://developer.android.com/guide/topics/media/media3)
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
-[![Vibecoded](https://img.shields.io/badge/Development-100%25_Vibecoded-ff69b4?style=for-the-badge)](https://en.wikipedia.org/wiki/Vibe_coding)
-
-> screenshot or something
-<img width="286" height="640" alt="Screenshot_2026-10-02-15-39-36-11_ced7f87d148198a9a5d73debfbcaaa47" src="https://github.com/user-attachments/assets/66d62519-04a4-4dbc-98ae-5488660fc0d0" />
-
+if something breaks, it is probably a feature. if it works, it is definitely
+an accident. (╯°□°)╯︵ ┻━┻
 
 ---
 
-## What is this
+## what it does
 
-Physic is a small but fully-featured music player that tries to look like a
-terminal in the style of [system24](https://refact0r.github.io/system24/) (even though it doesnt look like it) while actually being a ~~competent~~ STUPIDLY HORRIBLE local music player.
+- plays local audio files from folders you choose
+- amoled-black croviera theme with white text and a quietly dark red accent
+- system24 and a pile of other themes are still there if you want them
+- now playing card that expands when you tap the empty space
+- lyrics support with sidecar .lrc files and a metadata editor for assigning one
+- playlists with rename, reorder, custom covers, and json import/export
+- stats with song metadata instead of ugly file paths
+- artist pages show all songs first, with an albums button on top
+- home screen widget with album art and playback controls
+- full backup and restore for settings, stats, playlists, covers, and fonts
 
-Think Namida + Retro Music + Spotify-home, wearing a trench coat made of ASCII. Even though it has no fucking correlation.
+## customization (yes, all of it)
 
-## Features
+the settings screen is less of a settings screen and more of a warning label.
 
-### Playback
-- Full Media3/ExoPlayer pipeline
-- Shuffle & repeat (off / all / one)
-- Seekbar, prev / play-pause / next
-- Home-screen widget with play/pause + next
-- `.lrc` sidecar lyrics with current-line highlighting
+- move the top buttons to the top, bottom, left, or right
+- rename every button and give it a nerd font glyph
+- toggle nerd font icons instead of text
+- set corner radius and border width
+- pick a custom gradient for the custom theme
+- custom background images belong to the saved custom theme, not every theme
+- choose the now playing card title, expanded cover size, queue, and lyrics
+- pick a tab transition: fade, cmatrix, slides, zoom, or none
+- adjust font size, line height, row padding, cover size, and panel opacity
+- install .ttf fonts from a file instead of pasting a url
+- import stats and playlists from a file instead of pasting json
 
-### Library
-- MediaStore indexer with folder selection (`~/settings` → index folders)
-- Browse by songs, albums, or artists
-- Albums & artists show total track time and release year
-- Album → tap → per-song list · Artist → tap → albums → songs
-- Album art on every screen, custom artist images
+## the .lrc thing
 
-### Home (`~/home`)
-- Editable profile (name + picture)
-- Editable welcome message
-- Most played / recently added / albums row, Spotify-style
-- Shuffle all
+croviera looks for lyrics next to the song, in the app lyrics folder, and in
+mediastore. if it still cannot find them, you can assign a .lrc file in the
+metadata editor. the app will even say:
 
-### Stats (`~/stats`)
-- Total plays, most played songs, top albums, top artists
-- Tap a card to see the full ranked list
-- JSON stats import (please use it i dont know if it works) so you never lose your history
+```
+You actually have an .lrc file? Apply one in the metadata editor!
+```
 
-### Audio
-- Real system equalizer with per-band sliders (`~/eq`)
-- Bundled fonts: **DM Mono** (default), **JetBrains Mono**, **Fira Code**,
-  **Cascadia Code**, **Space Mono**
-- Built-in `.ttf` font downloader + selector
+yes, that exact sentence. with the space. (๑•̀ㅂ•́)و✧
 
-### Theming
-- **System24** (default, TUI-style)
-- **AMOLED** (true black, separate option)
-- **Catppuccin Mocha**, **Everforest**, **Tokyo Night**, **Gruvbox**, **Nord**,
-  **Rose Pine**, **Dracula**, **Solarized Dark**, **One Dark**, **Sakura**
-- Custom hex-color theme maker
-- Square corners by default, rounded-corner option
+## install
 
-## Install
+download the latest apk from the releases page:
 
-From the [Releases](../../releases) tab, grab the latest `app-release.apk`
-and sideload it. Or build from source:
+```
+https://github.com/emperornyctos/croviera/releases
+```
 
-```bash
-git clone https://github.com/Tolepi/physic.git
-cd physic
+install it, grant storage/audio permission, pick your music folders, and
+pretend everything is fine. (・ω・)ノ
+
+## build
+
+you need android studio or a working command line android sdk.
+
+```
+git clone https://github.com/emperornyctos/croviera.git
+cd croviera
 ./gradlew assembleRelease
 ```
 
-Requires Android 8.0+ (minSdk 26).
+the apk lands in `app/build/outputs/apk/release/`.
 
-## Building from source
+## license
 
-- JDK 17 (Temurin)
-- Android SDK 34, build-tools 34.0.0
-- Gradle (wrapper included)
-
-```bash
-doas emerge dev-java/openjdk-bin:17   # Gentoo
-sdkmanager "platforms;android-34" "build-tools;34.0.0"
-./gradlew assembleDebug
-```
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
----
-
-*made with ❤️, terminal aesthetics, and questionable life choices. I want the Bodypop vinyl please someone buy it for me.*
+mit. take it, change it, break it, fix it. just do not blame me. (´；ω；`)

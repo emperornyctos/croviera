@@ -1,4 +1,4 @@
-package com.physic.music
+package com.croviera.music
 
 import androidx.compose.ui.graphics.Color
 
@@ -13,8 +13,17 @@ data class ThemeColors(
 )
 
 object Themes {
-    // oklch defaults from system24: lightness-matched neutrals, purple accent
+    // croviera is the default: amoled black, white text, a quietly dark red accent.
     val all = listOf(
+        ThemeColors(
+            "Croviera",
+            bg = Color(0xFF000000),
+            surface = Color(0xFF000000),
+            text = Color(0xFFFFFFFF),
+            subtext = Color(0xFFB3B3B3),
+            accent = Color(0xFF8A1F2D),
+            border = Color(0xFF3A1E22),
+        ),
         ThemeColors(
             "System24",
             bg = Color(0xFF262626),            // oklch(19% 0 0)
