@@ -13,8 +13,8 @@ android {
         minSdk = 26
         targetSdk = 34
         // Must stay above the last Physic build (161) or Android refuses the update.
-        versionCode = 162
-        versionName = "1.0"
+        versionCode = 163
+        versionName = "1.1"
     }
     signingConfigs {
         create("release") {

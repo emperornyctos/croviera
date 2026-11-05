@@ -1,7 +1,11 @@
 package com.croviera.music
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -63,20 +67,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -92,6 +106,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import androidx.glance.appwidget.updateAll
 import java.io.File
@@ -215,6 +231,69 @@ val LocalUiAlpha = androidx.compose.runtime.staticCompositionLocalOf { 1f }
 
 /** Global border thickness, adjustable from ~/settings. */
 val LocalBorderWidth = androidx.compose.runtime.staticCompositionLocalOf { 1.dp }
+
+/** How every settings/home panel is painted (square image + colored drop shadow). */
+data class PanelStyle(
+    val image: String = "",
+    val imageAlpha: Float = 0.35f,
+    val shadowEnabled: Boolean = false,
+    val shadowColor: Color = Color(0x8C8A1F2D),
+    val shadowOffset: Dp = 4.dp,
+)
+
+val LocalPanelStyle = androidx.compose.runtime.staticCompositionLocalOf { PanelStyle() }
+
+/** A hard, offset, colorable drop shadow. Works on every API (no RenderNode tricks). */
+fun Modifier.panelShadow(shape: RoundedCornerShape, style: PanelStyle): Modifier {
+    if (!style.shadowEnabled || style.shadowColor.alpha <= 0f) return this
+    return drawBehind {
+        val offset = style.shadowOffset.toPx()
+        if (offset <= 0f) return@drawBehind
+        val r = shape.topStart.toPx(size, this)
+        val radius = CornerRadius(r, r)
+        // two layers: a softer one further down, then the crisp offset shape
+        drawRoundRect(
+            color = style.shadowColor.copy(alpha = style.shadowColor.alpha * 0.35f),
+            topLeft = Offset(0f, offset * 1.9f),
+            size = size,
+            cornerRadius = radius
+        )
+        drawRoundRect(
+            color = style.shadowColor,
+            topLeft = Offset(0f, offset),
+            size = size,
+            cornerRadius = radius
+        )
+    }
+}
+
+@Composable
+fun PanelSurface(
+    theme: ThemeColors,
+    shape: RoundedCornerShape,
+    modifier: Modifier = Modifier,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    val style = LocalPanelStyle.current
+    Box(
+        modifier
+            .panelShadow(shape, style)
+            .clip(shape)
+            .background(theme.surface.copy(alpha = LocalUiAlpha.current), shape)
+            .border(LocalBorderWidth.current, theme.border, shape)
+    ) {
+        if (style.image.isNotEmpty()) {
+            AsyncImage(
+                model = style.image,
+                contentDescription = null,
+                modifier = Modifier.matchParentSize().alpha(LocalUiAlpha.current),
+                contentScale = ContentScale.Crop
+            )
+            Box(Modifier.matchParentSize().background(theme.surface.copy(alpha = style.imageAlpha)))
+        }
+        content()
+    }
+}
 
 val TAB_NAMES = listOf("home", "songs", "albums", "artists", "stats", "playlists", "eq", "settings")
 val DEFAULT_NAV_LABELS = TAB_NAMES.associateWith { "~/$it" }
@@ -386,9 +465,14 @@ fun CrovieraApp() {
     val navNerd by Prefs.navNerd(c).collectAsState(initial = s.navNerd)
     val transition by Prefs.transition(c).collectAsState(initial = s.transition)
     val npLabel by Prefs.npLabel(c).collectAsState(initial = s.npLabel)
-    val npExpandedCover by Prefs.npExpandedCover(c).collectAsState(initial = s.npExpandedCover)
     val npExpandedQueue by Prefs.npExpandedQueue(c).collectAsState(initial = s.npExpandedQueue)
     val npExpandedLyrics by Prefs.npExpandedLyrics(c).collectAsState(initial = s.npExpandedLyrics)
+    val squareImg by Prefs.customSquareImg(c).collectAsState(initial = s.squareImg)
+    val squareImgAlpha by Prefs.squareImgAlpha(c).collectAsState(initial = s.squareImgAlpha)
+    val panelShadowOn by Prefs.panelShadow(c).collectAsState(initial = s.panelShadow)
+    val panelShadowColor by Prefs.panelShadowColor(c).collectAsState(initial = s.panelShadowColor)
+    val panelShadowOffset by Prefs.panelShadowOffset(c).collectAsState(initial = s.panelShadowOffset)
+    val panelShadowAlpha by Prefs.panelShadowAlpha(c).collectAsState(initial = s.panelShadowAlpha)
 
     // A background image belongs to the custom theme only; built-in themes stay clean.
     val effectiveBgImg = if (themeName == "Custom") bgImg else ""
@@ -399,15 +483,6 @@ fun CrovieraApp() {
     }
     val lineHeightTextStyle = if (lineHeightScale > 0f) TextStyle(lineHeight = (14 * lineHeightScale).sp) else TextStyle()
     val borderDp = borderWidth.dp
-
-    @Composable
-    fun Wrap(content: @Composable () -> Unit) {
-        CompositionLocalProvider(
-            LocalDensity provides scaledDensity,
-            LocalUiAlpha provides uiAlphaF,
-            LocalBorderWidth provides borderDp
-        ) { content() }
-    }
 
     val theme = if (themeName == "Custom") {
         ThemeColors(
@@ -420,6 +495,25 @@ fun CrovieraApp() {
             parseHexColor(custom.getOrNull(5), Color.Gray.copy(alpha = 0.35f)),
         )
     } else Themes.byName(themeName)
+
+    val effectiveSquareImg = if (themeName == "Custom") squareImg else ""
+    val panelStyle = PanelStyle(
+        image = effectiveSquareImg,
+        imageAlpha = (squareImgAlpha / 100f).coerceIn(0f, 1f),
+        shadowEnabled = panelShadowOn,
+        shadowColor = parseHexColor(panelShadowColor, theme.accent).copy(alpha = (panelShadowAlpha / 100f).coerceIn(0f, 1f)),
+        shadowOffset = panelShadowOffset.dp,
+    )
+
+    @Composable
+    fun Wrap(content: @Composable () -> Unit) {
+        CompositionLocalProvider(
+            LocalDensity provides scaledDensity,
+            LocalUiAlpha provides uiAlphaF,
+            LocalBorderWidth provides borderDp,
+            LocalPanelStyle provides panelStyle
+        ) { content() }
+    }
 
     val shape = RoundedCornerShape(cornerSize.dp)
     val bgBrush: Brush = if (themeName == "Custom" && gradient.start.isNotBlank() && gradient.end.isNotBlank()) {
@@ -515,8 +609,7 @@ fun CrovieraApp() {
             val profileName by Prefs.profileName(c).collectAsState(initial = s.profileName)
             val profilePic by Prefs.profilePic(c).collectAsState(initial = s.profilePic)
             var tab by remember { mutableStateOf(0) }
-            var npExpanded by remember { mutableStateOf(false) }
-            val cardScroll = rememberScrollState()
+            var showFullscreen by remember { mutableStateOf(false) }
             var matrixActive by remember { mutableStateOf(false) }
             LaunchedEffect(tab, transition) {
                 if (transition == "cmatrix") {
@@ -582,22 +675,17 @@ fun CrovieraApp() {
 
                     if (title.isNotEmpty()) {
                         val cur = Playback.queue.value.getOrNull(Playback.player?.currentMediaItemIndex ?: 0)
-                        Column(
+                        PanelSurface(
+                            theme, shape,
                             Modifier.fillMaxWidth()
-                                .heightIn(min = if (npExpanded) 0.dp else 140.dp)
-                                .animateContentSize()
-                                .border(LocalBorderWidth.current, theme.border, shape)
-                                .background(theme.surface.copy(alpha = uiAlphaF), shape)
-                                .then(if (npExpanded) Modifier.heightIn(max = 460.dp).verticalScroll(cardScroll) else Modifier)
-                                .clickable { npExpanded = !npExpanded }
-                                .padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                .heightIn(min = 140.dp)
+                                .clickable { showFullscreen = true }
                         ) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Text(npLabel, color = theme.accent, fontSize = 12.sp)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(if (npExpanded) "[ collapse ]" else "[ expand ]", color = theme.subtext, fontSize = 10.sp)
-                                    if (!npExpanded) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text(npLabel, color = theme.accent, fontSize = 12.sp)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("[ expand ]", color = theme.subtext, fontSize = 10.sp)
                                         Spacer(Modifier.width(10.dp))
                                         val favSong by Prefs.favSong(c).collectAsState(initial = "")
                                         val curSongTitle = Playback.queue.value.getOrNull(Playback.player?.currentMediaItemIndex ?: -1)?.title ?: ""
@@ -605,27 +693,6 @@ fun CrovieraApp() {
                                             modifier = Modifier.clickable { if (curSongTitle.isNotEmpty()) scope.launch { Prefs.setFavSong(c, if (favSong == curSongTitle) "" else curSongTitle) } })
                                     }
                                 }
-                            }
-                            if (npExpanded) {
-                                // Expanded view is intentionally only the big cover,
-                                // the expanded queue and the lyrics.
-                                if (cur != null) {
-                                    AsyncImage(
-                                        model = albumArtUri(cur), contentDescription = null,
-                                        modifier = Modifier.size(npExpandedCover.dp).clip(shape).border(LocalBorderWidth.current, theme.border, shape).align(Alignment.CenterHorizontally),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                                val upNext = Playback.queue.value.drop((Playback.player?.currentMediaItemIndex ?: 0) + 1).take(6)
-                                if (npExpandedQueue && upNext.isNotEmpty()) {
-                                    Text("up next", color = theme.subtext, fontSize = 10.sp, letterSpacing = 1.sp)
-                                    upNext.forEach { nextSong ->
-                                        Text("· ${nextSong.title} — ${nextSong.artist}", color = theme.subtext, fontSize = 12.sp,
-                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                }
-                                if (npExpandedLyrics) LyricsBlock(theme, pos, expanded = true)
-                            } else {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (cur != null) {
                                         val npSize by Prefs.npSize(c).collectAsState(initial = 52)
@@ -698,9 +765,9 @@ fun CrovieraApp() {
                                     Text("up next: ${upNext.joinToString(" · ") { it.title }}", color = theme.subtext, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 LyricsBlock(theme, pos, expanded = false)
+                                Text("[ tap anywhere for fullscreen ]",
+                                    color = theme.subtext.copy(alpha = 0.7f), fontSize = 9.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                             }
-                            Text(if (npExpanded) "[ tap anywhere to collapse ]" else "[ tap anywhere to expand ]",
-                                color = theme.subtext.copy(alpha = 0.7f), fontSize = 9.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
                         }
                     }
                 }
@@ -711,6 +778,19 @@ fun CrovieraApp() {
                     else -> Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(4.dp)
                 }
                 NavBar(theme, shape, navPosition, navLabels, navIcons, navNerd, tab, { tab = it }, navMod)
+
+                if (showFullscreen) {
+                    FullscreenPlayer(
+                        theme = theme,
+                        shape = shape,
+                        bgBrush = bgBrush,
+                        bgImg = effectiveBgImg,
+                        bgImgAlpha = bgAlphaPct / 100f,
+                        defaultShowQueue = npExpandedQueue,
+                        defaultShowLyrics = npExpandedLyrics,
+                        onClose = { showFullscreen = false }
+                    )
+                }
             }
         }
     }
@@ -756,6 +836,201 @@ fun LyricsBlock(theme: ThemeColors, posMs: Float, expanded: Boolean = false) {
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun FullscreenPlayer(
+    theme: ThemeColors,
+    shape: RoundedCornerShape,
+    bgBrush: Brush,
+    bgImg: String,
+    bgImgAlpha: Float,
+    defaultShowQueue: Boolean,
+    defaultShowLyrics: Boolean,
+    onClose: () -> Unit,
+) {
+    val c = LocalContext.current
+    val scope = rememberCoroutineScope()
+    BackHandler { onClose() }
+    val queue by Playback.queue.collectAsState()
+    val title by Playback.title.collectAsState()
+    val artist by Playback.artist.collectAsState()
+    val playing by Playback.playing.collectAsState()
+    val shuffleOn by Prefs.shuffle(c).collectAsState(initial = false)
+    val repeatOn by Prefs.repeat(c).collectAsState(initial = 0)
+    val favSong by Prefs.favSong(c).collectAsState(initial = "")
+    val index = Playback.player?.currentMediaItemIndex ?: 0
+    val cur = queue.getOrNull(index)
+    var pos by remember { mutableStateOf(0f) }
+    var scrubbing by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(defaultShowQueue) }
+    var showLyrics by remember { mutableStateOf(defaultShowLyrics) }
+    LaunchedEffect(playing, cur?.metaKey, scrubbing) {
+        if (!scrubbing) {
+            while (true) {
+                pos = Playback.player?.currentPosition?.toFloat() ?: 0f
+                if (!playing) break
+                delay(400)
+            }
+        }
+    }
+    val dur = (Playback.player?.duration?.toFloat() ?: cur?.durationMs?.toFloat() ?: 1f).coerceAtLeast(1f)
+    val curTitle = cur?.title ?: title
+    val ext = cur?.path?.substringAfterLast('.', "")?.uppercase().orEmpty()
+    val info = listOfNotNull(
+        ext.takeIf { it.isNotBlank() },
+        cur?.year?.takeIf { it.isNotBlank() },
+        formatTime(cur?.durationMs ?: dur.toLong())
+    ).joinToString(" · ")
+    val queueNext = queue.drop(index + 1)
+
+    Box(
+        Modifier.fillMaxSize()
+            .background(bgBrush)
+            .pointerInput(Unit) { detectTapGestures { } }
+    ) {
+        if (bgImg.isNotEmpty()) {
+            AsyncImage(model = bgImg, contentDescription = null,
+                modifier = Modifier.fillMaxSize().alpha(bgImgAlpha), contentScale = ContentScale.Crop)
+        }
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("now playing", color = theme.subtext, fontSize = 11.sp, letterSpacing = 2.sp)
+                Spacer(Modifier.weight(1f))
+                Text("[ close ]", color = theme.accent, fontSize = 13.sp, modifier = Modifier.clickable { onClose() })
+            }
+
+            PanelSurface(theme, shape, Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
+                AsyncImage(
+                    model = cur?.let { albumArtUri(it) } ?: "",
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                    contentScale = ContentScale.Crop
+                )
+            }
+
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(formatTime(pos.toLong()), color = theme.subtext, fontSize = 11.sp)
+                Slider(
+                    value = pos.coerceIn(0f, dur),
+                    valueRange = 0f..dur,
+                    onValueChange = { scrubbing = true; pos = it },
+                    onValueChangeFinished = {
+                        Playback.player?.seekTo(pos.toLong())
+                        scrubbing = false
+                    },
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                    colors = SliderDefaults.colors(
+                        thumbColor = theme.accent,
+                        activeTrackColor = theme.accent,
+                        inactiveTrackColor = theme.border
+                    )
+                )
+                Text(formatTime(dur.toLong()), color = theme.subtext, fontSize = 11.sp)
+            }
+
+            Text(curTitle, color = theme.text, fontSize = 24.sp, textAlign = TextAlign.Center,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
+            Text(artist, color = theme.subtext, fontSize = 15.sp, textAlign = TextAlign.Center)
+            Text(info, color = theme.subtext.copy(alpha = 0.8f), fontSize = 11.sp, textAlign = TextAlign.Center)
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(Modifier.size(48.dp).clickable {
+                    val next = (repeatOn + 1) % 3
+                    scope.launch {
+                        Prefs.setRepeat(c, next)
+                        Playback.player?.repeatMode = when (next) {
+                            1 -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                            2 -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                            else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+                        }
+                    }
+                }, contentAlignment = Alignment.Center) {
+                    Icon(
+                        if (repeatOn == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        "repeat",
+                        tint = if (repeatOn > 0) theme.accent else theme.subtext,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+                Box(Modifier.size(48.dp).clickable { Playback.player?.seekToPreviousMediaItem() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.SkipPrevious, "prev", tint = theme.text, modifier = Modifier.size(30.dp))
+                }
+                Box(
+                    Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(theme.accent).clickable {
+                        Playback.player?.let { if (it.isPlaying) it.pause() else it.play() }
+                    },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, "playpause",
+                        tint = theme.bg, modifier = Modifier.size(34.dp))
+                }
+                Box(Modifier.size(48.dp).clickable { Playback.player?.seekToNextMediaItem() }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.SkipNext, "next", tint = theme.text, modifier = Modifier.size(30.dp))
+                }
+                Box(Modifier.size(48.dp).clickable {
+                    scope.launch { Prefs.setShuffle(c, !shuffleOn); Playback.player?.shuffleModeEnabled = !shuffleOn }
+                }, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Shuffle, "shuffle", tint = if (shuffleOn) theme.accent else theme.subtext, modifier = Modifier.size(26.dp))
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(if (showLyrics) "[ lyrics ]" else " lyrics ", color = if (showLyrics) theme.accent else theme.subtext,
+                    fontSize = 13.sp, modifier = Modifier.clickable { showLyrics = !showLyrics })
+                Text(if (showQueue) "[ queue ]" else " queue ", color = if (showQueue) theme.accent else theme.subtext,
+                    fontSize = 13.sp, modifier = Modifier.clickable { showQueue = !showQueue })
+                Text(
+                    if (favSong == curTitle && curTitle.isNotEmpty()) "★ favorite" else "☆ favorite",
+                    color = if (favSong == curTitle && curTitle.isNotEmpty()) theme.accent else theme.subtext,
+                    fontSize = 13.sp,
+                    modifier = Modifier.clickable {
+                        if (curTitle.isNotEmpty()) scope.launch {
+                            Prefs.setFavSong(c, if (favSong == curTitle) "" else curTitle)
+                        }
+                    }
+                )
+            }
+
+            if (showQueue && queueNext.isNotEmpty()) {
+                Column(Modifier.fillMaxWidth().widthIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("up next", color = theme.subtext, fontSize = 10.sp, letterSpacing = 1.sp)
+                    queueNext.take(20).forEachIndexed { i, s ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable {
+                                Playback.player?.seekTo(index + 1 + i, 0)
+                            }.padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AsyncImage(model = albumArtUri(s), contentDescription = null,
+                                modifier = Modifier.size(30.dp).clip(shape))
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(s.title, color = theme.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(s.artist, color = theme.subtext, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Text(formatTime(s.durationMs), color = theme.subtext, fontSize = 11.sp)
+                        }
+                    }
+                }
+            }
+
+            if (showLyrics) {
+                Box(Modifier.fillMaxWidth().widthIn(max = 420.dp)) {
+                    LyricsBlock(theme, pos, expanded = true)
+                }
+            }
+            Spacer(Modifier.height(18.dp))
         }
     }
 }
@@ -808,10 +1083,12 @@ fun SpinningDisc(sizeDp: Int, accent: Color = Color(0xFF8A1F2D)) {
 
 @Composable
 fun Panel(title: String, theme: ThemeColors, modifier: Modifier = Modifier, shape: RoundedCornerShape, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().border(LocalBorderWidth.current, theme.border, shape).background(theme.surface.copy(alpha = LocalUiAlpha.current), shape).padding(12.dp)) {
-        Text(L.tr(LocalContext.current, title).uppercase(), color = theme.subtext, fontSize = 11.sp, letterSpacing = 2.sp)
-        Spacer(Modifier.height(8.dp))
-        content()
+    PanelSurface(theme, shape, modifier.fillMaxWidth()) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Text(L.tr(LocalContext.current, title).uppercase(), color = theme.subtext, fontSize = 11.sp, letterSpacing = 2.sp)
+            Spacer(Modifier.height(8.dp))
+            content()
+        }
     }
 }
 
@@ -837,17 +1114,11 @@ fun HomeTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape, we
     val bio by Prefs.profileBio(c).collectAsState(initial = "")
     val pronouns by Prefs.profilePronouns(c).collectAsState(initial = "")
     val fav by Prefs.favSong(c).collectAsState(initial = "")
-    val pickPfp = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            try { c.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: Exception) {}
-            scope.launch { Prefs.setProfilePic(c, uri.toString()) }
-        }
+    val pickPfp = rememberCroppedImagePicker("pfp", 1f, theme) { path ->
+        scope.launch { Prefs.setProfilePic(c, path) }
     }
-    val pickBanner = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            try { c.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: Exception) {}
-            scope.launch { Prefs.setProfileBanner(c, uri.toString()) }
-        }
+    val pickBanner = rememberCroppedImagePicker("banner", 4f, theme) { path ->
+        scope.launch { Prefs.setProfileBanner(c, path) }
     }
     val location by Prefs.profileLocation(c).collectAsState(initial = "")
     val favAlbum by Prefs.profileFavAlbum(c).collectAsState(initial = "")
@@ -876,7 +1147,7 @@ fun HomeTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape, we
                     Text(profileName, color = theme.text, fontSize = 15.sp, modifier = Modifier.clickable { editName = true })
                     Text(L.tr(LocalContext.current, "tap to edit"), color = theme.subtext, fontSize = 10.sp)
                 }
-                Text(L.tr(LocalContext.current, "[set pfp]"), color = theme.accent, fontSize = 12.sp, modifier = Modifier.clickable { pickPfp.launch("image/*") })
+                Text(L.tr(LocalContext.current, "[set pfp]"), color = theme.accent, fontSize = 12.sp, modifier = Modifier.clickable { pickPfp() })
             }
             if (pronouns.isNotEmpty()) Text("($pronouns)", color = theme.subtext, fontSize = 12.sp, modifier = Modifier.clickable { editPronouns = true })
             if (location.isNotEmpty()) Text("@ $location", color = theme.subtext, fontSize = 12.sp, modifier = Modifier.clickable { editLocation = true })
@@ -886,7 +1157,7 @@ fun HomeTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape, we
             val curIdx = Playback.player?.currentMediaItemIndex ?: -1
             if (fav.isNotEmpty()) Text("★ favorite: $fav", color = theme.subtext, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(L.tr(LocalContext.current, "[banner]"), color = theme.accent, fontSize = 12.sp, maxLines = 1, softWrap = false, modifier = Modifier.clickable { pickBanner.launch("image/*") })
+                Text(L.tr(LocalContext.current, "[banner]"), color = theme.accent, fontSize = 12.sp, maxLines = 1, softWrap = false, modifier = Modifier.clickable { pickBanner() })
                 Text(L.tr(LocalContext.current, "[pronouns]"), color = theme.accent, fontSize = 12.sp, maxLines = 1, softWrap = false, modifier = Modifier.clickable { editPronouns = true })
                 Text(L.tr(LocalContext.current, "[location]"), color = theme.accent, fontSize = 12.sp, maxLines = 1, softWrap = false, modifier = Modifier.clickable { editLocation = true })
             }
@@ -1204,6 +1475,8 @@ fun ArtistsTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape)
             val byAlbum = list.groupBy { it.album }
             val customImg by Prefs.artistImage(c, artistName).collectAsState(initial = "")
             var showAlbums by remember(artistName) { mutableStateOf(false) }
+            var songSort by remember(artistName) { mutableStateOf(0) } // album, year, a-z, length
+            var albumSort by remember(artistName) { mutableStateOf(0) } // year, a-z, length
             val pickImg = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
                 if (uri != null) {
                     try { c.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: Exception) {}
@@ -1232,7 +1505,23 @@ fun ArtistsTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape)
                 }
                 Spacer(Modifier.height(4.dp))
                 if (showAlbums) {
-                    byAlbum.entries.sortedBy { it.key }.forEach { (album, albumSongs) ->
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        listOf("year", "a-z", "length").forEachIndexed { i, label ->
+                            Text(if (albumSort == i) "[$label]" else " $label ", color = if (albumSort == i) theme.accent else theme.subtext,
+                                fontSize = 12.sp, modifier = Modifier.clickable { albumSort = i }.padding(vertical = 2.dp))
+                        }
+                    }
+                    val sortedAlbums = remember(byAlbum, albumSort) {
+                        when (albumSort) {
+                            1 -> byAlbum.entries.sortedBy { it.key.lowercase() }
+                            2 -> byAlbum.entries.sortedBy { e -> e.value.sumOf { it.durationMs } }
+                            else -> byAlbum.entries.sortedWith(compareBy(
+                                { e -> e.value.mapNotNull { it.year.toIntOrNull() }.minOrNull() ?: Int.MAX_VALUE },
+                                { e -> e.key.lowercase() }
+                            ))
+                        }
+                    }
+                    sortedAlbums.forEach { (album, albumSongs) ->
                         Row(Modifier.fillMaxWidth().clickable { selectedAlbum = album }.padding(vertical = rowPad.dp), verticalAlignment = Alignment.CenterVertically) {
                             AsyncImage(model = albumArtUri(albumSongs.first()), contentDescription = null, modifier = Modifier.size(coverSize.dp + 8.dp).clip(shape))
                             Spacer(Modifier.width(12.dp))
@@ -1244,7 +1533,29 @@ fun ArtistsTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape)
                         }
                     }
                 } else {
-                    val sortedSongs = remember(list) { list.sortedBy { s -> s.track.let { if (it == 0) Int.MAX_VALUE else it } } }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        listOf("album", "year", "a-z", "length").forEachIndexed { i, label ->
+                            Text(if (songSort == i) "[$label]" else " $label ", color = if (songSort == i) theme.accent else theme.subtext,
+                                fontSize = 12.sp, modifier = Modifier.clickable { songSort = i }.padding(vertical = 2.dp))
+                        }
+                    }
+                    val sortedSongs = remember(list, songSort) {
+                        when (songSort) {
+                            1 -> list.sortedWith(compareBy(
+                                { it.year.toIntOrNull() ?: Int.MAX_VALUE },
+                                { it.album.lowercase() },
+                                { it.track.takeIf { t -> t > 0 } ?: Int.MAX_VALUE },
+                                { it.title.lowercase() }
+                            ))
+                            2 -> list.sortedBy { it.title.lowercase() }
+                            3 -> list.sortedBy { it.durationMs }
+                            else -> list.sortedWith(compareBy(
+                                { it.album.lowercase() },
+                                { it.track.takeIf { t -> t > 0 } ?: Int.MAX_VALUE },
+                                { it.title.lowercase() }
+                            ))
+                        }
+                    }
                     sortedSongs.forEachIndexed { i, s ->
                         Row(Modifier.fillMaxWidth().clickable { Playback.play(c, sortedSongs, i) }.padding(vertical = rowPad.dp), verticalAlignment = Alignment.CenterVertically) {
                             AsyncImage(model = albumArtUri(s), contentDescription = null, modifier = Modifier.size(coverSize.dp).clip(shape))
@@ -1283,13 +1594,14 @@ fun ArtistsTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape)
 @Composable
 fun DetailView(theme: ThemeColors, title: String, subtitle: String, coverModel: Any?, songs: List<Song>, onBack: () -> Unit, shape: RoundedCornerShape = RoundedCornerShape(0.dp), scrollState: androidx.compose.foundation.ScrollState = rememberScrollState()) {
     val c = LocalContext.current
-    var sortMode by remember { mutableStateOf(0) } // 0 = album order (track), 1 = title A-Z, 2 = year
+    var sortMode by remember { mutableStateOf(0) } // 0 = track, 1 = title, 2 = year, 3 = duration
     val rowPad by Prefs.rowPad(c).collectAsState(initial = 8)
     val coverSize by Prefs.coverSize(c).collectAsState(initial = 40)
     val sorted = remember(songs, sortMode) {
         when (sortMode) {
             1 -> songs.sortedBy { it.title.lowercase() }
             2 -> songs.sortedBy { it.year.toIntOrNull() ?: Int.MAX_VALUE }
+            3 -> songs.sortedBy { it.durationMs }
             else -> songs.sortedBy { it.track.let { t -> if (t == 0) Int.MAX_VALUE else t } }
         }
     }
@@ -1307,8 +1619,8 @@ fun DetailView(theme: ThemeColors, title: String, subtitle: String, coverModel: 
         }
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            Text("sort: ${listOf("track/album", "title", "year")[sortMode]}", color = theme.accent, fontSize = 12.sp,
-                modifier = Modifier.clickable { sortMode = (sortMode + 1) % 3 }.border(LocalBorderWidth.current, theme.border).padding(6.dp))
+            Text("sort: ${listOf("track/album", "title", "year", "duration")[sortMode]}", color = theme.accent, fontSize = 12.sp,
+                modifier = Modifier.clickable { sortMode = (sortMode + 1) % 4 }.border(LocalBorderWidth.current, theme.border).padding(6.dp))
         }
         Spacer(Modifier.height(6.dp))
         sorted.forEachIndexed { i, s ->
@@ -1391,17 +1703,19 @@ fun StatsTab(songs: List<Song>, theme: ThemeColors) {
 
 @Composable
 fun StatCard(title: String, items: List<Pair<String, Int>>, theme: ThemeColors, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().border(LocalBorderWidth.current, theme.border).background(theme.surface).clickable { onClick() }.padding(12.dp)) {
-        Text(L.tr(LocalContext.current, title).uppercase(), color = theme.accent, fontSize = 13.sp)
-        Spacer(Modifier.height(6.dp))
-        if (items.isEmpty()) Text("no data", color = theme.subtext, fontSize = 12.sp)
-        items.forEachIndexed { i, (name, count) ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                Text("${i + 1}. $name", color = theme.text, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("$count", color = theme.subtext, fontSize = 12.sp)
+    PanelSurface(theme, RoundedCornerShape(0.dp), Modifier.fillMaxWidth().clickable { onClick() }) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Text(L.tr(LocalContext.current, title).uppercase(), color = theme.accent, fontSize = 13.sp)
+            Spacer(Modifier.height(6.dp))
+            if (items.isEmpty()) Text("no data", color = theme.subtext, fontSize = 12.sp)
+            items.forEachIndexed { i, (name, count) ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                    Text("${i + 1}. $name", color = theme.text, fontSize = 12.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("$count", color = theme.subtext, fontSize = 12.sp)
+                }
             }
+            Text("tap for full list →", color = theme.subtext, fontSize = 10.sp)
         }
-        Text("tap for full list →", color = theme.subtext, fontSize = 10.sp)
     }
 }
 
@@ -1437,11 +1751,13 @@ fun SettingsTab(
     var customSubtext by remember(customState) { mutableStateOf(customState.getOrNull(3) ?: "#") }
     var customBorder by remember(customState) { mutableStateOf(customState.getOrNull(5) ?: "#") }
     val customBgImg by Prefs.customBgImg(c).collectAsState(initial = "")
-    val pickBg = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            try { c.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: Exception) {}
-            scope.launch { Prefs.setCustomBgImg(c, uri.toString()) }
-        }
+    val customSquareImg by Prefs.customSquareImg(c).collectAsState(initial = "")
+    val squareAlpha by Prefs.squareImgAlpha(c).collectAsState(initial = 35)
+    val pickBg = rememberCroppedImagePicker("background", 9f / 16f, theme) { path ->
+        scope.launch { Prefs.setCustomBgImg(c, path) }
+    }
+    val pickSquare = rememberCroppedImagePicker("square", 16f / 9f, theme) { path ->
+        scope.launch { Prefs.setCustomSquareImg(c, path) }
     }
     val gradientState by Prefs.gradient(c).collectAsState(initial = Prefs.GradientPrefs("", "", 135))
     var gradStart by remember(gradientState) { mutableStateOf(gradientState.start.ifBlank { customBg }) }
@@ -1592,9 +1908,23 @@ fun SettingsTab(
                 }
                 Text("custom theme background image", color = theme.text, fontSize = 13.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { pickBg.launch("image/*") }) { Text("[ pick bg ]") }
+                    TextButton(onClick = { pickBg() }) { Text("[ pick bg ]") }
                     if (customBgImg.isNotEmpty()) TextButton(onClick = { scope.launch { Prefs.setCustomBgImg(c, "") } }) { Text("[ clear ]") }
                     Text(if (customBgImg.isEmpty()) "none" else "set", color = theme.subtext, fontSize = 11.sp)
+                }
+                Text("square replacement image (all panels)", color = theme.text, fontSize = 13.sp)
+                Text("one image, filled into every panel. great for a win95 window frame.", color = theme.subtext, fontSize = 11.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { pickSquare() }) { Text("[ pick square ]") }
+                    if (customSquareImg.isNotEmpty()) TextButton(onClick = { scope.launch { Prefs.setCustomSquareImg(c, "") } }) { Text("[ clear ]") }
+                    Text(if (customSquareImg.isEmpty()) "none" else "set", color = theme.subtext, fontSize = 11.sp)
+                }
+                if (customSquareImg.isNotEmpty()) {
+                    Text("panel image dim: ${squareAlpha}%", color = theme.text, fontSize = 12.sp)
+                    Slider(value = squareAlpha.toFloat(), onValueChange = { v ->
+                        scope.launch { Prefs.setSquareImgAlpha(c, v.toInt().coerceIn(0, 90)) }
+                    }, valueRange = 0f..90f,
+                        colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
                 }
                 var newThemeName by remember { mutableStateOf("") }
                 Row(Modifier.fillMaxWidth()) {
@@ -1604,7 +1934,7 @@ fun SettingsTab(
                             val j = try { org.json.JSONObject(existing) } catch (e: Exception) { org.json.JSONObject() }
                             val savedGradStart = if (gradientOn) gradStart.trimStart('#') else ""
                             val savedGradEnd = if (gradientOn) gradEnd.trimStart('#') else ""
-                            j.put(newThemeName, "${customBg.trimStart('#')}|${customSurface.trimStart('#')}|${customText.trimStart('#')}|${customSubtext.trimStart('#')}|${customAccent.trimStart('#')}|${customBorder.trimStart('#')}|$savedGradStart|$savedGradEnd|$gradAngle|${customBgImg}")
+                            j.put(newThemeName, "${customBg.trimStart('#')}|${customSurface.trimStart('#')}|${customText.trimStart('#')}|${customSubtext.trimStart('#')}|${customAccent.trimStart('#')}|${customBorder.trimStart('#')}|$savedGradStart|$savedGradEnd|$gradAngle|${customBgImg}|${customSquareImg}")
                             scope.launch { Prefs.setSavedCustomThemes(c, j.toString()) }
                             newThemeName = ""
                         }
@@ -1619,7 +1949,7 @@ fun SettingsTab(
                                 Surface(
                                     Modifier.padding(end = 4.dp, bottom = 4.dp).clickable {
                                         val j = try { org.json.JSONObject(existing) } catch (e: Exception) { org.json.JSONObject() }
-                                        val list = j.optString(name, "").split("|", limit = 10)
+                                        val list = j.optString(name, "").split("|", limit = 11)
                                         if (list.size >= 6) {
                                             scope.launch {
                                                 Prefs.setCustom(c, "#" + list[0], "#" + list[1], "#" + list[2], "#" + list[3], "#" + list[4], "#" + list[5])
@@ -1635,6 +1965,7 @@ fun SettingsTab(
                                                     Prefs.setGradient(c, "", "", 135)
                                                     Prefs.setCustomBgImg(c, "")
                                                 }
+                                                Prefs.setCustomSquareImg(c, list.getOrNull(10).orEmpty())
                                             }
                                         }
                                     },
@@ -1718,6 +2049,30 @@ fun SettingsTab(
             Text("border width: ${borderWidth}dp", color = theme.text, fontSize = 13.sp)
             Slider(value = borderWidth.toFloat(), onValueChange = { v -> scope.launch { Prefs.setBorderWidth(c, v.toInt().coerceIn(0, 4)) } },
                 valueRange = 0f..4f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            val shadowOn by Prefs.panelShadow(c).collectAsState(initial = false)
+            val shadowColor by Prefs.panelShadowColor(c).collectAsState(initial = "#8A1F2D")
+            val shadowOffset by Prefs.panelShadowOffset(c).collectAsState(initial = 4)
+            val shadowAlpha by Prefs.panelShadowAlpha(c).collectAsState(initial = 55)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("colored shadow below panels", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Switch(checked = shadowOn, onCheckedChange = { scope.launch { Prefs.setPanelShadow(c, it) } })
+            }
+            if (shadowOn) {
+                Text("shadow color", color = theme.subtext, fontSize = 11.sp)
+                ColorSliderPicker(current = shadowColor, onPick = { hex ->
+                    scope.launch { Prefs.setPanelShadowColor(c, hex) }
+                })
+                Text("shadow offset: ${shadowOffset}dp", color = theme.text, fontSize = 12.sp)
+                Slider(value = shadowOffset.toFloat(), onValueChange = { v ->
+                    scope.launch { Prefs.setPanelShadowOffset(c, v.toInt().coerceIn(1, 16)) }
+                }, valueRange = 1f..16f,
+                    colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                Text("shadow opacity: ${shadowAlpha}%", color = theme.text, fontSize = 12.sp)
+                Slider(value = shadowAlpha.toFloat(), onValueChange = { v ->
+                    scope.launch { Prefs.setPanelShadowAlpha(c, v.toInt().coerceIn(0, 100)) }
+                }, valueRange = 0f..100f,
+                    colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            }
         }
 
         Panel("navigation", theme, shape = RoundedCornerShape(0.dp)) {
@@ -1765,9 +2120,8 @@ fun SettingsTab(
             }
         }
 
-        Panel("now playing card", theme, shape = RoundedCornerShape(0.dp)) {
+        Panel("now playing / fullscreen", theme, shape = RoundedCornerShape(0.dp)) {
             val npLabel by Prefs.npLabel(c).collectAsState(initial = "Now playing!")
-            val npCover by Prefs.npExpandedCover(c).collectAsState(initial = 180)
             val npQueue by Prefs.npExpandedQueue(c).collectAsState(initial = true)
             val npLyrics by Prefs.npExpandedLyrics(c).collectAsState(initial = true)
             var npLabelField by remember(npLabel) { mutableStateOf(npLabel) }
@@ -1775,15 +2129,13 @@ fun SettingsTab(
                 npLabelField = v
                 scope.launch { Prefs.setNpLabel(c, v) }
             }, label = { Text("card title") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Text("expanded cover: ${npCover}dp", color = theme.text, fontSize = 13.sp)
-            Slider(value = npCover.toFloat(), onValueChange = { v -> scope.launch { Prefs.setNpExpandedCover(c, v.toInt().coerceIn(80, 280)) } },
-                valueRange = 80f..280f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("tap the card to open the fullscreen player", color = theme.subtext, fontSize = 11.sp)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("show queue when expanded", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text("show queue in fullscreen", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Switch(checked = npQueue, onCheckedChange = { scope.launch { Prefs.setNpExpandedQueue(c, it) } })
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("show lyrics when expanded", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text("show lyrics in fullscreen", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Switch(checked = npLyrics, onCheckedChange = { scope.launch { Prefs.setNpExpandedLyrics(c, it) } })
             }
         }
@@ -1917,15 +2269,12 @@ fun SettingsTab(
                 colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
 
             val customDisc by Prefs.customDisc(c).collectAsState(initial = "")
-            val pickDisc = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-                if (uri != null) {
-                    try { c.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: Exception) {}
-                    scope.launch { Prefs.setCustomDisc(c, uri.toString()) }
-                }
+            val pickDisc = rememberCroppedImagePicker("disc", 1f, theme) { path ->
+                scope.launch { Prefs.setCustomDisc(c, path) }
             }
             Text("custom disc icon: ${if (customDisc.isEmpty()) "none (pixel-art default)" else "custom set"}", color = theme.text, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { pickDisc.launch("image/*") }) { Text("[ pick svg/gif/png ]") }
+                TextButton(onClick = { pickDisc() }) { Text("[ pick image ]") }
                 if (customDisc.isNotEmpty()) TextButton(onClick = { scope.launch { Prefs.setCustomDisc(c, "") } }) { Text("[ clear ]") }
             }
 
@@ -2137,6 +2486,214 @@ fun PlaylistsTab(theme: ThemeColors, shape: RoundedCornerShape) {
             dismissButton = { TextButton(onClick = { renameTarget = null }) { Text("cancel") } }
         )
     }
+}
+
+/**
+ * Pick an image, then let the user pan/zoom it inside a fixed aspect frame before
+ * saving a cropped copy into internal storage. Used for pfp, banner, disc,
+ * background and the per-theme square replacement.
+ */
+@Composable
+fun rememberCroppedImagePicker(
+    prefix: String,
+    aspect: Float,
+    theme: ThemeColors,
+    onSaved: (String) -> Unit
+): () -> Unit {
+    var pending by remember { mutableStateOf<Uri?>(null) }
+    val latest by rememberUpdatedState(onSaved)
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) pending = uri
+    }
+    pending?.let { uri ->
+        CropImageDialog(
+            uri = uri,
+            aspect = aspect,
+            title = prefix,
+            theme = theme,
+            onCancel = { pending = null },
+            onCropped = { path ->
+                pending = null
+                latest(path)
+            }
+        )
+    }
+    return { launcher.launch("image/*") }
+}
+
+@Composable
+fun CropImageDialog(
+    uri: Uri,
+    aspect: Float,
+    title: String,
+    theme: ThemeColors,
+    onCancel: () -> Unit,
+    onCropped: (String) -> Unit,
+) {
+    val c = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var bitmap by remember(uri) { mutableStateOf<Bitmap?>(null) }
+    var error by remember(uri) { mutableStateOf("") }
+    var saving by remember(uri) { mutableStateOf(false) }
+
+    LaunchedEffect(uri) {
+        bitmap = withContext(Dispatchers.IO) { decodeBitmap(c, uri) }
+        if (bitmap == null) error = "could not load image"
+    }
+
+    Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = theme.bg) {
+            Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("crop $title", color = theme.text, fontSize = 16.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text("[ cancel ]", color = theme.subtext, fontSize = 13.sp, modifier = Modifier.clickable { onCancel() })
+                }
+                val bmp = bitmap
+                if (bmp == null) {
+                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        if (error.isNotEmpty()) Text(error, color = theme.subtext, fontSize = 13.sp)
+                        else CircularProgressIndicator(color = theme.accent)
+                    }
+                } else {
+                    var scale by remember(bmp) { mutableStateOf(1f) }
+                    var offset by remember(bmp) { mutableStateOf(Offset.Zero) }
+                    var framePx by remember(bmp) { mutableStateOf(IntSize.Zero) }
+                    val previewBitmap = remember(bmp) { bmp.asImageBitmap() }
+
+                    BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        val frameW = minOf(maxWidth, maxHeight * aspect)
+                        val frameH = frameW / aspect
+                        Box(
+                            Modifier.size(frameW, frameH)
+                                .clipToBounds()
+                                .background(Color.Black)
+                                .onSizeChanged { framePx = it }
+                                .pointerInput(bmp, framePx) {
+                                    detectTransformGestures { _, pan, zoom, _ ->
+                                        val base = max(
+                                            framePx.width / bmp.width.toFloat(),
+                                            framePx.height / bmp.height.toFloat()
+                                        )
+                                        val nextScale = (scale * zoom).coerceIn(1f, 6f)
+                                        val disp = base * nextScale
+                                        val maxX = ((bmp.width * disp - framePx.width) / 2f).coerceAtLeast(0f)
+                                        val maxY = ((bmp.height * disp - framePx.height) / 2f).coerceAtLeast(0f)
+                                        scale = nextScale
+                                        offset = Offset(
+                                            (offset.x + pan.x).coerceIn(-maxX, maxX),
+                                            (offset.y + pan.y).coerceIn(-maxY, maxY)
+                                        )
+                                    }
+                                }
+                        ) {
+                            // Draw the whole bitmap scaled around the frame centre. Scaling
+                            // the already-cropped frame would trap the user inside the
+                            // initial crop, so this keeps every pixel reachable.
+                            Canvas(Modifier.fillMaxSize()) {
+                                val base = max(
+                                    size.width / bmp.width.toFloat(),
+                                    size.height / bmp.height.toFloat()
+                                )
+                                val disp = base * scale
+                                val drawW = bmp.width * disp
+                                val drawH = bmp.height * disp
+                                drawImage(
+                                    image = previewBitmap,
+                                    dstOffset = IntOffset(
+                                        ((size.width - drawW) / 2f + offset.x).roundToInt(),
+                                        ((size.height - drawH) / 2f + offset.y).roundToInt()
+                                    ),
+                                    dstSize = IntSize(
+                                        drawW.roundToInt().coerceAtLeast(1),
+                                        drawH.roundToInt().coerceAtLeast(1)
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Text("drag to pan · pinch to zoom", color = theme.subtext, fontSize = 11.sp)
+                    if (error.isNotEmpty()) Text(error, color = Color(0xFFEF5350), fontSize = 11.sp)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Button(
+                            onClick = {
+                                if (saving) return@Button
+                                saving = true
+                                scope.launch {
+                                    val path = withContext(Dispatchers.IO) {
+                                        cropAndSave(c, bmp, framePx, scale, offset, title)
+                                    }
+                                    saving = false
+                                    if (path != null) onCropped(path)
+                                    else error = "could not crop image"
+                                }
+                            },
+                            enabled = !saving,
+                            colors = ButtonDefaults.buttonColors(containerColor = theme.accent)
+                        ) {
+                            Text(if (saving) "saving…" else "[ use image ]", color = theme.bg)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun decodeBitmap(c: Context, uri: Uri): Bitmap? {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        try {
+            val source = ImageDecoder.createSource(c.contentResolver, uri)
+            return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val w = info.size.width
+                val h = info.size.height
+                val maxDim = 2048
+                if (w > maxDim || h > maxDim) {
+                    val scale = maxDim.toFloat() / max(w, h)
+                    decoder.setTargetSize((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1))
+                }
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        } catch (_: Exception) {
+            // Fall through to BitmapFactory for providers that hand back
+            // streams ImageDecoder cannot seek (cloud pickers, odd mime types).
+        }
+    }
+    return try {
+        val bytes = c.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (max(bounds.outWidth / sample, bounds.outHeight / sample) > 2048) sample *= 2
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+    } catch (_: Exception) { null }
+}
+
+private fun cropAndSave(
+    c: Context,
+    bmp: Bitmap,
+    frame: IntSize,
+    scale: Float,
+    offset: Offset,
+    prefix: String,
+): String? {
+    if (frame.width <= 0 || frame.height <= 0) return null
+    return try {
+        val base = max(frame.width / bmp.width.toFloat(), frame.height / bmp.height.toFloat())
+        val disp = base * scale
+        val cropW = (frame.width / disp).roundToInt().coerceIn(1, bmp.width)
+        val cropH = (frame.height / disp).roundToInt().coerceIn(1, bmp.height)
+        val left = ((bmp.width / 2f) - (frame.width / 2f + offset.x) / disp).roundToInt().coerceIn(0, bmp.width - cropW)
+        val top = ((bmp.height / 2f) - (frame.height / 2f + offset.y) / disp).roundToInt().coerceIn(0, bmp.height - cropH)
+        val cropped = Bitmap.createBitmap(bmp, left, top, cropW, cropH)
+        val dir = File(c.filesDir, "images").apply { mkdirs() }
+        val safe = prefix.replace(Regex("[^A-Za-z0-9._-]"), "_").take(32).ifBlank { "image" }
+        val file = File(dir, "${safe}_${System.currentTimeMillis()}.png")
+        file.outputStream().use { out -> cropped.compress(Bitmap.CompressFormat.PNG, 100, out) }
+        if (cropped !== bmp) cropped.recycle()
+        Uri.fromFile(file).toString()
+    } catch (_: Exception) { null }
 }
 
 @Composable

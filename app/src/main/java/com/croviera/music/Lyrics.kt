@@ -19,8 +19,8 @@ object Lyrics {
         if (assigned != null) {
             if (assigned.startsWith("content://")) {
                 try {
-                    c.contentResolver.openInputStream(Uri.parse(assigned))?.bufferedReader()?.use { reader ->
-                        val parsed = parseLrc(reader.readText())
+                    c.contentResolver.openInputStream(Uri.parse(assigned))?.use { input ->
+                        val parsed = parseLrc(decode(input.readBytes()))
                         if (parsed.isNotEmpty()) return parsed
                     }
                 } catch (_: Exception) {}
@@ -104,10 +104,21 @@ object Lyrics {
         return null
     }
 
+    private fun decode(bytes: ByteArray): String {
+        if (bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
+        }
+        if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
+            return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
+        }
+        val offset = if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) 3 else 0
+        return String(bytes, offset, bytes.size - offset, Charsets.UTF_8).removePrefix("\uFEFF")
+    }
+
     private fun parseFile(f: File): List<Pair<Long, String>>? {
         if (!f.exists() || !f.isFile) return null
         return try {
-            parseLrc(f.readText().removePrefix("\uFEFF")).takeIf { it.isNotEmpty() }
+            parseLrc(decode(f.readBytes())).takeIf { it.isNotEmpty() }
         } catch (_: Exception) { null }
     }
 

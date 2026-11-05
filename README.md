@@ -21,8 +21,9 @@ this is a horrible project. it is a vibecoded mess. i am aware of this.
 i have made peace with this. (´･ω･`)
 
 it started as a prototype, got out of hand, and is now a ~~full~~ app with a
-rebrand and a version number that finally starts at 1.0. please do not look
-at the commit history. please do look at the settings menu because i think its also a mess. (￣▽￣)ゞ
+rebrand, a version number that finally starts at 1.0, and a 1.1 that adds a
+fullscreen player and even more customization. please do not look at the
+commit history. please do look at the settings menu because i think its also a mess. (￣▽￣)ゞ
 
 if something breaks, it is probably a feature. if it works, it is definitely
 an accident. (╯°□°)╯︵ ┻━┻
@@ -34,13 +35,15 @@ an accident. (╯°□°)╯︵ ┻━┻
 - plays local audio files from folders you choose
 - amoled-black croviera theme with white text and a quietly dark red accent
 - system24 and a pile of other themes are still there if you want them
-- now playing card that expands when you tap the empty space
+- now playing card that opens a fullscreen, metro-style player when tapped
+- fullscreen player with a big cover card, scrubbing, queue, lyrics, and favorite
 - lyrics support with sidecar .lrc files and a metadata editor for assigning one
 - playlists with rename, reorder, custom covers, and json import/export
 - stats with song metadata instead of ugly file paths
-- artist pages show all songs first, with an albums button on top
+- artist pages with song sorting by album, year, a-z, or length
+- artist albums sort by year, a-z, or total length
 - home screen widget with album art and playback controls
-- full backup and restore for settings, stats, playlists, covers, and fonts
+- full backup and restore for settings, stats, playlists, covers, fonts, and images
 
 ## customization (yes, all of it)
 
@@ -50,9 +53,12 @@ wallahi you can do this (more coming soon).
 - rename every button and give it a nerd font glyph
 - toggle nerd font icons instead of text
 - set corner radius and border width
+- add a colorable drop shadow under every panel, with offset and opacity controls
+- give the custom theme a square replacement image that fills every panel
 - pick a custom gradient for the custom theme
 - custom background images belong to the saved custom theme, not every theme
-- choose the now playing card title, expanded cover size, queue, and lyrics
+- choose the now playing card title plus fullscreen queue and lyrics defaults
+- crop, pan, and zoom profile pictures, banners, disc icons, backgrounds, and square images
 - pick a tab transition: fade, cmatrix, slides, zoom, or none
 - adjust font size, line height, row padding, cover size, and panel opacity
 - install .ttf fonts from a file instead of pasting a url

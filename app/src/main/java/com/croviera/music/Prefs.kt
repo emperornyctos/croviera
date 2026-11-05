@@ -38,6 +38,12 @@ object Prefs {
     private val FAV_SONG = stringPreferencesKey("fav_song")
     private val CUSTOM_DISC = stringPreferencesKey("custom_disc")
     private val CUSTOM_BG_IMG = stringPreferencesKey("custom_bg_img")
+    private val CUSTOM_SQUARE_IMG = stringPreferencesKey("custom_square_img")
+    private val SQUARE_IMG_ALPHA = intPreferencesKey("square_img_alpha")
+    private val PANEL_SHADOW = booleanPreferencesKey("panel_shadow")
+    private val PANEL_SHADOW_COLOR = stringPreferencesKey("panel_shadow_color")
+    private val PANEL_SHADOW_OFFSET = intPreferencesKey("panel_shadow_offset")
+    private val PANEL_SHADOW_ALPHA = intPreferencesKey("panel_shadow_alpha")
     private val PROFILE_LOCATION = stringPreferencesKey("profile_location")
     private val PROFILE_FAV_ALBUM = stringPreferencesKey("profile_fav_album")
     private val FONT_NAME = stringPreferencesKey("font_name")
@@ -103,6 +109,18 @@ object Prefs {
     fun favSong(c: Context) = c.ds.data.map { it[FAV_SONG] ?: "" }
     fun customDisc(c: Context) = c.ds.data.map { it[CUSTOM_DISC] ?: "" }
     fun customBgImg(c: Context) = c.ds.data.map { it[CUSTOM_BG_IMG] ?: "" }
+    fun customSquareImg(c: Context) = c.ds.data.map { it[CUSTOM_SQUARE_IMG] ?: "" }
+    suspend fun setCustomSquareImg(c: Context, v: String) = c.ds.edit { it[CUSTOM_SQUARE_IMG] = v }
+    fun squareImgAlpha(c: Context) = c.ds.data.map { it[SQUARE_IMG_ALPHA] ?: 35 }
+    suspend fun setSquareImgAlpha(c: Context, v: Int) = c.ds.edit { it[SQUARE_IMG_ALPHA] = v }
+    fun panelShadow(c: Context) = c.ds.data.map { it[PANEL_SHADOW] ?: false }
+    suspend fun setPanelShadow(c: Context, v: Boolean) = c.ds.edit { it[PANEL_SHADOW] = v }
+    fun panelShadowColor(c: Context) = c.ds.data.map { it[PANEL_SHADOW_COLOR] ?: "#8A1F2D" }
+    suspend fun setPanelShadowColor(c: Context, v: String) = c.ds.edit { it[PANEL_SHADOW_COLOR] = v }
+    fun panelShadowOffset(c: Context) = c.ds.data.map { it[PANEL_SHADOW_OFFSET] ?: 4 }
+    suspend fun setPanelShadowOffset(c: Context, v: Int) = c.ds.edit { it[PANEL_SHADOW_OFFSET] = v }
+    fun panelShadowAlpha(c: Context) = c.ds.data.map { it[PANEL_SHADOW_ALPHA] ?: 55 }
+    suspend fun setPanelShadowAlpha(c: Context, v: Int) = c.ds.edit { it[PANEL_SHADOW_ALPHA] = v }
     fun profileLocation(c: Context) = c.ds.data.map { it[PROFILE_LOCATION] ?: "" }
     fun profileFavAlbum(c: Context) = c.ds.data.map { it[PROFILE_FAV_ALBUM] ?: "" }
     fun fontName(c: Context) = c.ds.data.map { it[FONT_NAME] ?: "DM Mono" }
@@ -185,6 +203,12 @@ object Prefs {
         val npExpandedQueue: Boolean = true,
         val npExpandedLyrics: Boolean = true,
         val gradient: GradientPrefs = GradientPrefs("", "", 135),
+        val squareImg: String = "",
+        val squareImgAlpha: Int = 35,
+        val panelShadow: Boolean = false,
+        val panelShadowColor: String = "#8A1F2D",
+        val panelShadowOffset: Int = 4,
+        val panelShadowAlpha: Int = 55,
     )
 
     /** Read the first DataStore value set so the UI never flashes defaults on launch/rotation. */
@@ -217,6 +241,12 @@ object Prefs {
             npExpandedQueue = p[NP_EXPANDED_QUEUE] ?: true,
             npExpandedLyrics = p[NP_EXPANDED_LYRICS] ?: true,
             gradient = GradientPrefs(p[CUSTOM_GRADIENT_START] ?: "", p[CUSTOM_GRADIENT_END] ?: "", p[CUSTOM_GRADIENT_ANGLE] ?: 135),
+            squareImg = p[CUSTOM_SQUARE_IMG] ?: "",
+            squareImgAlpha = p[SQUARE_IMG_ALPHA] ?: 35,
+            panelShadow = p[PANEL_SHADOW] ?: false,
+            panelShadowColor = p[PANEL_SHADOW_COLOR] ?: "#8A1F2D",
+            panelShadowOffset = p[PANEL_SHADOW_OFFSET] ?: 4,
+            panelShadowAlpha = p[PANEL_SHADOW_ALPHA] ?: 55,
         )
     }
 
@@ -266,26 +296,18 @@ object Prefs {
             lyrics.listFiles()?.forEach { f -> lo.put(f.name, android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)) }
             obj.put("lyrics", lo)
         }
+        val images = File(c.filesDir, "images")
+        if (images.exists() && images.listFiles()?.isNotEmpty() == true) {
+            val io = org.json.JSONObject()
+            images.listFiles()?.forEach { f -> io.put(f.name, android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP)) }
+            obj.put("images", io)
+        }
         return obj.toString(2)
     }
 
     /** Restore a blob produced by exportAll. */
     suspend fun importAll(c: Context, json: String) {
         val obj = try { org.json.JSONObject(json) } catch (e: Exception) { return }
-        obj.optJSONObject("prefs")?.let { p ->
-            c.ds.edit { prefs ->
-                p.keys().forEach { k ->
-                    when (val v = p.opt(k)) {
-                        is String -> prefs[stringPreferencesKey(k)] = v
-                        is Boolean -> prefs[booleanPreferencesKey(k)] = v
-                        is Int -> prefs[intPreferencesKey(k)] = v
-                        is Long -> prefs[longPreferencesKey(k)] = v
-                        is Double -> prefs[floatPreferencesKey(k)] = v.toFloat()
-                        else -> {}
-                    }
-                }
-            }
-        }
         obj.optString("stats", "").takeIf { it.isNotBlank() }?.let { File(c.filesDir, "stats.json").writeText(it) }
         obj.optString("playlists", "").takeIf { it.isNotBlank() }?.let { File(c.filesDir, "playlists.json").writeText(it) }
         obj.optString("playlist_covers", "").takeIf { it.isNotBlank() }?.let { File(c.filesDir, "playlist_covers.json").writeText(it) }
@@ -312,6 +334,30 @@ object Prefs {
                 try {
                     File(dir, k).writeBytes(android.util.Base64.decode(lo.getString(k), android.util.Base64.NO_WRAP))
                 } catch (_: Exception) {}
+            }
+        }
+        obj.optJSONObject("images")?.let { io ->
+            val dir = File(c.filesDir, "images").apply { mkdirs() }
+            io.keys().forEach { k ->
+                try {
+                    File(dir, k).writeBytes(android.util.Base64.decode(io.getString(k), android.util.Base64.NO_WRAP))
+                } catch (_: Exception) {}
+            }
+        }
+        // Restore prefs last so image/font files already exist when the UI
+        // recomposes and Coil tries to load the restored paths.
+        obj.optJSONObject("prefs")?.let { p ->
+            c.ds.edit { prefs ->
+                p.keys().forEach { k ->
+                    when (val v = p.opt(k)) {
+                        is String -> prefs[stringPreferencesKey(k)] = v
+                        is Boolean -> prefs[booleanPreferencesKey(k)] = v
+                        is Int -> prefs[intPreferencesKey(k)] = v
+                        is Long -> prefs[longPreferencesKey(k)] = v
+                        is Double -> prefs[floatPreferencesKey(k)] = v.toFloat()
+                        else -> {}
+                    }
+                }
             }
         }
     }
