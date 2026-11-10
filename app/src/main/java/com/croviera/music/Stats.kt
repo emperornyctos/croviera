@@ -6,6 +6,7 @@ import java.io.File
 
 object Stats {
     private const val FILE = "stats.json"
+    private const val SEP = "\u001F"
     private fun file(c: Context) = File(c.filesDir, FILE)
 
     private fun load(c: Context): JSONObject {
@@ -14,20 +15,83 @@ object Stats {
 
     private fun save(c: Context, j: JSONObject) { file(c).writeText(j.toString()) }
 
-    fun played(c: Context, songPath: String, album: String, artist: String = "") {
+    /**
+     * Stats are tied to the song's metadata, never its file path. Moving a
+     * file between folders therefore keeps its play count and last-played
+     * entry. Title + artist + album is stable across a move and does not leak
+     * the old path into the UI.
+     */
+    fun songKey(title: String, artist: String, album: String): String =
+        listOf(title.trim(), artist.trim(), album.trim()).joinToString(SEP)
+
+    fun songKey(song: Song): String = songKey(song.title, song.artist, song.album)
+
+    fun label(key: String): String {
+        val parts = key.split(SEP)
+        return if (parts.size >= 2 && parts[0].isNotBlank()) {
+            if (parts[1].isNotBlank()) "${parts[0]} · ${parts[1]}" else parts[0]
+        } else {
+            key.substringAfterLast('/').substringBeforeLast('.')
+        }
+    }
+
+    fun played(c: Context, song: Song) {
         val root = load(c)
+        val key = songKey(song)
         val songs = root.optJSONObject("songs") ?: JSONObject().also { root.put("songs", it) }
-        songs.put(songPath, songs.optInt(songPath, 0) + 1)
+        songs.put(key, songs.optInt(key, 0) + 1)
         val albums = root.optJSONObject("albums") ?: JSONObject().also { root.put("albums", it) }
-        albums.put(album, albums.optInt(album, 0) + 1)
+        if (song.album.isNotBlank()) albums.put(song.album, albums.optInt(song.album, 0) + 1)
         val artists = root.optJSONObject("artists") ?: JSONObject().also { root.put("artists", it) }
-        if (artist.isNotEmpty()) artists.put(artist, artists.optInt(artist, 0) + 1)
+        if (song.artist.isNotBlank()) artists.put(song.artist, artists.optInt(song.artist, 0) + 1)
         root.put("total", root.optInt("total", 0) + 1)
-        root.put("last_path", songPath)
+        root.put("last_key", key)
+        // Kept for old builds/backups; new code reads last_key first.
+        root.put("last_path", song.path)
         save(c, root)
     }
 
-    fun lastPlayedPath(c: Context): String? = load(c).optString("last_path", "").takeIf { it.isNotBlank() }
+    fun lastPlayedKey(c: Context): String? {
+        val root = load(c)
+        return root.optString("last_key", "").takeIf { it.isNotBlank() }
+            ?: root.optString("last_path", "").takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Converts 1.0/1.1 path-keyed song stats into metadata keys. Unknown paths
+     * are left alone so imported stats are not lost.
+     */
+    fun migrate(c: Context, songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val root = load(c)
+        val songsObj = root.optJSONObject("songs")
+        val byPath = songs.associateBy { it.path }
+        val byUri = songs.associateBy { it.uri.toString() }
+        var changed = false
+        if (songsObj != null) {
+            val merged = JSONObject()
+            songsObj.keys().forEach { k ->
+                val count = songsObj.optInt(k, 0)
+                val song = byPath[k] ?: byUri[k]
+                val key = song?.let { songKey(it) } ?: k
+                if (key != k) changed = true
+                merged.put(key, merged.optInt(key, 0) + count)
+            }
+            if (changed) root.put("songs", merged)
+        }
+        val oldLast = root.optString("last_path", "")
+        if (oldLast.isNotBlank()) {
+            val song = byPath[oldLast] ?: byUri[oldLast]
+            if (song != null) {
+                val key = songKey(song)
+                if (root.optString("last_key", "") != key) {
+                    root.put("last_key", key)
+                    changed = true
+                }
+            }
+        }
+        if (changed) save(c, root)
+    }
 
     fun topArtists(c: Context, n: Int = 10): List<Pair<String, Int>> {
         val a = load(c).optJSONObject("artists") ?: return emptyList()
@@ -47,10 +111,12 @@ object Stats {
     fun total(c: Context) = load(c).optInt("total", 0)
 
     /** Import Namida-style JSON: either { "songPath": count } or { "tracks": {path: {"plays": n}} } or our own export format. */
-    fun importJson(c: Context, text: String) {
+    fun importJson(c: Context, text: String, songs: List<Song> = emptyList()) {
         val src = try { JSONObject(text) } catch (e: Exception) { return }
         val root = load(c)
-        val songs = root.optJSONObject("songs") ?: JSONObject().also { root.put("songs", it) }
+        val songStats = root.optJSONObject("songs") ?: JSONObject().also { root.put("songs", it) }
+        val byPath = songs.associateBy { it.path }
+        val byUri = songs.associateBy { it.uri.toString() }
         val walk: (JSONObject) -> Unit = { obj ->
             obj.keys().forEach { k ->
                 val v = obj.opt(k)
@@ -59,8 +125,13 @@ object Stats {
                     is JSONObject -> v.optInt("plays", v.optInt("count", v.optInt("play_count", 0)))
                     else -> 0
                 }
-                if (count > 0 && (k.endsWith(".mp3", true) || k.endsWith(".flac", true) || k.endsWith(".m4a", true) || k.endsWith(".ogg", true) || k.contains('/'))) {
-                    songs.put(k, songs.optInt(k, 0) + count)
+                val song = byPath[k] ?: byUri[k]
+                val key = song?.let { songKey(it) } ?: k
+                val looksLikeSong = song != null || k.contains(SEP) || k.endsWith(".mp3", true) ||
+                    k.endsWith(".flac", true) || k.endsWith(".m4a", true) || k.endsWith(".ogg", true) ||
+                    k.contains('/')
+                if (count > 0 && looksLikeSong) {
+                    songStats.put(key, songStats.optInt(key, 0) + count)
                     root.put("total", root.optInt("total", 0) + count)
                 }
             }

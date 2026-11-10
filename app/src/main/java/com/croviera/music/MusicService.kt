@@ -18,6 +18,7 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -89,6 +90,7 @@ class MusicService : MediaSessionService() {
                     Playback.title.value = m.title?.toString() ?: "?"
                     Playback.artist.value = m.artist?.toString() ?: "?"
                 }
+                Playback.index.value = player?.currentMediaItemIndex ?: 0
                 countedSong = null
                 updateWidget()
                 ensureArtwork()
@@ -126,7 +128,7 @@ class MusicService : MediaSessionService() {
                             val song = Playback.queue.value.firstOrNull { it.uri.toString() == uriStr }
                             if (song != null && countedSong != song.uri.toString()) {
                                 countedSong = song.uri.toString()
-                                Stats.played(applicationContext, song.path, song.album, song.artist)
+                                Stats.played(applicationContext, song)
                             }
                         }
                     }
@@ -151,9 +153,22 @@ class MusicService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
 
+    /**
+     * Keep the media service in the foreground even while paused. Media3
+     * normally demotes a paused session to a normal background service, which
+     * lets aggressive OEM task killers (ColorOS, etc.) close the process.
+     */
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        val state = session.player.playbackState
+        val keepForeground = startInForegroundRequired ||
+            state == Player.STATE_READY || state == Player.STATE_BUFFERING
+        super.onUpdateNotification(session, keepForeground)
+    }
+
     override fun onDestroy() {
         session?.run { player.release(); release() }
         Playback.player = null
+        scope.cancel()
         super.onDestroy()
     }
 
@@ -191,7 +206,14 @@ class MusicService : MediaSessionService() {
     }
 
     private fun updateWidget() {
-        scope.launch { MusicWidget().updateAll(applicationContext) }
+        scope.launch {
+            try {
+                MusicWidget().updateAll(applicationContext)
+            } catch (_: Exception) {
+                // A launcher/widget host can disappear or reject an update; it
+                // must never take the playback process down with it.
+            }
+        }
     }
 }
 

@@ -84,6 +84,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.Density
@@ -346,56 +347,119 @@ fun tabTransition(kind: String): ContentTransform = when (kind) {
     else -> fadeIn(tween(180)) togetherWith fadeOut(tween(140))
 }
 
+data class NavConfig(
+    val position: String = "top",
+    val labels: Map<String, String> = emptyMap(),
+    val icons: Map<String, String> = emptyMap(),
+    val nerd: Boolean = false,
+    val images: Map<String, String> = emptyMap(),
+    val imageSize: Int = 28,
+    val itemWidth: Int = 0,
+    val itemHeight: Int = 0,
+    val spacing: Int = 2,
+    val padding: Int = 4,
+    val thickness: Int = 0,
+    val bgAlpha: Int = 94,
+    val bgColor: String = "",
+    val imageFit: String = "crop",
+    val textSize: Int = 14,
+    val nerdSize: Int = 20,
+    val selectedAlpha: Int = 14,
+)
+
+/**
+ * The bar grows to fit configured item/image sizes, then stops at a sane size
+ * so it still works on small phones and does not eat the whole screen.
+ */
+fun navExtent(config: NavConfig, vertical: Boolean): Dp {
+    val pad = config.padding.dp
+    val image = config.imageSize.dp
+    val itemW = if (config.itemWidth > 0) config.itemWidth.dp else 0.dp
+    val itemH = if (config.itemHeight > 0) config.itemHeight.dp else 0.dp
+    val content = if (vertical) maxOf(itemW, image) + pad * 2 + 2.dp
+    else maxOf(itemH, image) + pad * 2 + 2.dp
+    val base = if (config.thickness > 0) config.thickness.dp else if (vertical) 92.dp else 40.dp
+    val cap = if (vertical) 220.dp else 180.dp
+    return maxOf(base, content).coerceAtMost(cap)
+}
+
 @Composable
 fun NavBar(
     theme: ThemeColors,
     shape: RoundedCornerShape,
-    position: String,
-    labels: Map<String, String>,
-    icons: Map<String, String>,
-    nerd: Boolean,
+    config: NavConfig,
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val vertical = position == "left" || position == "right"
+    val vertical = config.position == "left" || config.position == "right"
     val nerdFont = androidx.compose.ui.text.font.FontFamily(androidx.compose.ui.text.font.Font(R.font.symbols_nerd_mono))
+    val extent = navExtent(config, vertical)
+    val pad = config.padding.dp
+    val imageSize = config.imageSize.dp.coerceAtMost((extent - pad * 2 - 8.dp).coerceAtLeast(12.dp))
+    val bg = parseHexColor(config.bgColor, theme.bg).copy(alpha = (config.bgAlpha / 100f).coerceIn(0f, 1f))
     val item: @Composable (Int) -> Unit = { i ->
         val name = TAB_NAMES[i]
         val isSelected = selected == i
-        val text = if (nerd) icons[name] ?: DEFAULT_NAV_ICONS.getValue(name)
-        else labels[name] ?: DEFAULT_NAV_LABELS.getValue(name)
-        Text(
-            text = text,
-            color = if (isSelected) theme.accent else theme.subtext,
-            fontSize = if (nerd) 20.sp else 14.sp,
-            fontFamily = if (nerd) nerdFont else null,
-            maxLines = 1,
-            modifier = Modifier
-                .clip(shape)
-                .background(if (isSelected) theme.accent.copy(alpha = 0.14f) else Color.Transparent, shape)
-                .clickable { onSelect(i) }
-                .padding(horizontal = 8.dp, vertical = 6.dp)
-        )
+        val image = config.images[name].orEmpty()
+        val base = Modifier
+            .clip(shape)
+            .background(if (isSelected) theme.accent.copy(alpha = (config.selectedAlpha / 100f).coerceIn(0f, 1f)) else Color.Transparent, shape)
+            .clickable { onSelect(i) }
+        val sized = if (vertical) {
+            base
+                .then(if (config.itemWidth > 0) Modifier.width(config.itemWidth.dp.coerceAtMost((extent - pad * 2).coerceAtLeast(24.dp))) else Modifier.fillMaxWidth())
+                .then(if (config.itemHeight > 0) Modifier.height(config.itemHeight.dp.coerceAtMost((extent - pad * 2).coerceAtLeast(24.dp))) else Modifier.heightIn(min = 28.dp))
+        } else {
+            base
+                .then(if (config.itemWidth > 0) Modifier.width(config.itemWidth.dp.coerceAtMost(220.dp)) else Modifier)
+                .then(if (config.itemHeight > 0) Modifier.height(config.itemHeight.dp.coerceAtMost((extent - pad * 2).coerceAtLeast(24.dp))) else Modifier.heightIn(min = 28.dp))
+        }
+        Box(sized.padding(horizontal = 6.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+            if (image.isNotEmpty()) {
+                AsyncImage(
+                    model = image,
+                    contentDescription = name,
+                    modifier = Modifier.size(imageSize).clip(shape),
+                    contentScale = when (config.imageFit) {
+                        "fit" -> ContentScale.Fit
+                        "fill" -> ContentScale.FillBounds
+                        else -> ContentScale.Crop
+                    }
+                )
+            } else {
+                val text = if (config.nerd) config.icons[name] ?: DEFAULT_NAV_ICONS.getValue(name)
+                else config.labels[name] ?: DEFAULT_NAV_LABELS.getValue(name)
+                Text(
+                    text = text,
+                    color = if (isSelected) theme.accent else theme.subtext,
+                    fontSize = if (config.nerd) config.nerdSize.sp else config.textSize.sp,
+                    fontFamily = if (config.nerd) nerdFont else null,
+                    maxLines = 1
+                )
+            }
+        }
     }
     if (vertical) {
         Column(
             modifier = modifier
                 .verticalScroll(rememberScrollState())
-                .background(theme.bg.copy(alpha = 0.94f), shape)
+                .width(extent)
+                .background(bg, shape)
                 .border(LocalBorderWidth.current, theme.border, shape)
-                .padding(4.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(pad),
+            verticalArrangement = Arrangement.spacedBy(config.spacing.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) { TAB_NAMES.indices.forEach { item(it) } }
     } else {
         Row(
             modifier = modifier
                 .horizontalScroll(rememberScrollState())
-                .background(theme.bg.copy(alpha = 0.94f), shape)
+                .heightIn(min = extent)
+                .background(bg, shape)
                 .border(LocalBorderWidth.current, theme.border, shape)
-                .padding(4.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(pad),
+            horizontalArrangement = Arrangement.spacedBy(config.spacing.dp),
             verticalAlignment = Alignment.CenterVertically
         ) { TAB_NAMES.indices.forEach { item(it) } }
     }
@@ -463,6 +527,27 @@ fun CrovieraApp() {
     val navLabelsJson by Prefs.navLabels(c).collectAsState(initial = s.navLabels)
     val navIconsJson by Prefs.navIcons(c).collectAsState(initial = s.navIcons)
     val navNerd by Prefs.navNerd(c).collectAsState(initial = s.navNerd)
+    val navImagesJson by Prefs.navButtonImages(c).collectAsState(initial = s.navButtonImages)
+    val navImageSize by Prefs.navImageSize(c).collectAsState(initial = s.navImageSize)
+    val navItemWidth by Prefs.navItemWidth(c).collectAsState(initial = s.navItemWidth)
+    val navItemHeight by Prefs.navItemHeight(c).collectAsState(initial = s.navItemHeight)
+    val navItemSpacing by Prefs.navItemSpacing(c).collectAsState(initial = s.navItemSpacing)
+    val navPadding by Prefs.navPadding(c).collectAsState(initial = s.navPadding)
+    val navBarThickness by Prefs.navBarThickness(c).collectAsState(initial = s.navBarThickness)
+    val navBgAlpha by Prefs.navBgAlpha(c).collectAsState(initial = s.navBgAlpha)
+    val navBgColor by Prefs.navBgColor(c).collectAsState(initial = s.navBgColor)
+    val navImageFit by Prefs.navImageFit(c).collectAsState(initial = s.navImageFit)
+    val navTextSize by Prefs.navTextSize(c).collectAsState(initial = s.navTextSize)
+    val navNerdSize by Prefs.navNerdSize(c).collectAsState(initial = s.navNerdSize)
+    val navSelectedAlpha by Prefs.navSelectedAlpha(c).collectAsState(initial = s.navSelectedAlpha)
+    val npCoverRadius by Prefs.npCoverRadius(c).collectAsState(initial = s.npCoverRadius)
+    val npCoverSize by Prefs.npCoverSize(c).collectAsState(initial = s.npCoverSize)
+    val npTitleSize by Prefs.npTitleSize(c).collectAsState(initial = s.npTitleSize)
+    val npArtistSize by Prefs.npArtistSize(c).collectAsState(initial = s.npArtistSize)
+    val npDim by Prefs.npDim(c).collectAsState(initial = s.npDim)
+    val npBgFit by Prefs.npBgFit(c).collectAsState(initial = s.npBgFit)
+    val npButtonRadius by Prefs.npButtonRadius(c).collectAsState(initial = s.npButtonRadius)
+    val keepScreenOn by Prefs.keepScreenOn(c).collectAsState(initial = s.keepScreenOn)
     val transition by Prefs.transition(c).collectAsState(initial = s.transition)
     val npLabel by Prefs.npLabel(c).collectAsState(initial = s.npLabel)
     val npExpandedQueue by Prefs.npExpandedQueue(c).collectAsState(initial = s.npExpandedQueue)
@@ -500,7 +585,9 @@ fun CrovieraApp() {
     val panelStyle = PanelStyle(
         image = effectiveSquareImg,
         imageAlpha = (squareImgAlpha / 100f).coerceIn(0f, 1f),
-        shadowEnabled = panelShadowOn,
+        // Shadows are a Custom-theme feature. Built-in themes stay flat even
+        // if a previously saved custom shadow is still in DataStore.
+        shadowEnabled = themeName == "Custom" && panelShadowOn,
         shadowColor = parseHexColor(panelShadowColor, theme.accent).copy(alpha = (panelShadowAlpha / 100f).coerceIn(0f, 1f)),
         shadowOffset = panelShadowOffset.dp,
     )
@@ -555,6 +642,8 @@ fun CrovieraApp() {
     }
 
     val onboarded by Prefs.onboarded(c).collectAsState(initial = s.onboarded)
+    val view = LocalView.current
+    LaunchedEffect(keepScreenOn) { view.keepScreenOn = keepScreenOn }
 
     if (!onboarded) {
         Surface(Modifier.fillMaxSize(), color = theme.bg) {
@@ -620,7 +709,11 @@ fun CrovieraApp() {
             }
             var songs by remember { mutableStateOf(listOf<Song>()) }
             val rescan = MusicIndex.rescanTick.intValue
-            LaunchedEffect(folders, rescan) { songs = MusicIndex.songsInFolders(c, folders) }
+            LaunchedEffect(folders, rescan) {
+                val loaded = withContext(Dispatchers.IO) { MusicIndex.songsInFolders(c, folders) }
+                withContext(Dispatchers.IO) { Stats.migrate(c, loaded) }
+                songs = loaded
+            }
 
             val title = Playback.title.collectAsState().value
             val artist = Playback.artist.collectAsState().value
@@ -636,14 +729,38 @@ fun CrovieraApp() {
             }
             val navLabels = remember(navLabelsJson) { parseStringMap(navLabelsJson) }
             val navIcons = remember(navIconsJson) { parseStringMap(navIconsJson) }
+            val navImages = remember(navImagesJson) { parseStringMap(navImagesJson) }
+            val navConfig = NavConfig(
+                position = navPosition,
+                labels = navLabels,
+                icons = navIcons,
+                nerd = navNerd,
+                images = navImages,
+                imageSize = navImageSize,
+                itemWidth = navItemWidth,
+                itemHeight = navItemHeight,
+                spacing = navItemSpacing,
+                padding = navPadding,
+                thickness = navBarThickness,
+                // Bar color/opacity and the selected-item wash are Custom-theme
+                // styling. Built-in themes always use their own surface color.
+                bgAlpha = if (themeName == "Custom") navBgAlpha else 94,
+                bgColor = if (themeName == "Custom") navBgColor else "",
+                imageFit = navImageFit,
+                textSize = navTextSize,
+                nerdSize = navNerdSize,
+                selectedAlpha = if (themeName == "Custom") navSelectedAlpha else 14,
+            )
+            val navVertical = navPosition == "left" || navPosition == "right"
+            val navSpace = navExtent(navConfig, navVertical) + 8.dp
 
             Box(Modifier.fillMaxSize()) {
                 Column(
                     Modifier.fillMaxSize().padding(
-                        top = if (navPosition == "top") 48.dp else 0.dp,
-                        bottom = if (navPosition == "bottom") 48.dp else 0.dp,
-                        start = if (navPosition == "left") 100.dp else 0.dp,
-                        end = if (navPosition == "right") 100.dp else 0.dp
+                        top = if (navPosition == "top") navSpace else 0.dp,
+                        bottom = if (navPosition == "bottom") navSpace else 0.dp,
+                        start = if (navPosition == "left") navSpace else 0.dp,
+                        end = if (navPosition == "right") navSpace else 0.dp
                     ).padding(10.dp)
                 ) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -773,11 +890,11 @@ fun CrovieraApp() {
                 }
                 val navMod = when (navPosition) {
                     "bottom" -> Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(4.dp)
-                    "left" -> Modifier.align(Alignment.CenterStart).width(92.dp).fillMaxHeight().padding(4.dp)
-                    "right" -> Modifier.align(Alignment.CenterEnd).width(92.dp).fillMaxHeight().padding(4.dp)
+                    "left" -> Modifier.align(Alignment.CenterStart).fillMaxHeight().padding(4.dp)
+                    "right" -> Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(4.dp)
                     else -> Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(4.dp)
                 }
-                NavBar(theme, shape, navPosition, navLabels, navIcons, navNerd, tab, { tab = it }, navMod)
+                NavBar(theme, shape, navConfig, tab, { tab = it }, navMod)
 
                 if (showFullscreen) {
                     FullscreenPlayer(
@@ -786,6 +903,7 @@ fun CrovieraApp() {
                         bgBrush = bgBrush,
                         bgImg = effectiveBgImg,
                         bgImgAlpha = bgAlphaPct / 100f,
+                        customTheme = themeName == "Custom",
                         defaultShowQueue = npExpandedQueue,
                         defaultShowLyrics = npExpandedLyrics,
                         onClose = { showFullscreen = false }
@@ -840,6 +958,48 @@ fun LyricsBlock(theme: ThemeColors, posMs: Float, expanded: Boolean = false) {
     }
 }
 
+data class NpSticker(
+    val image: String,
+    val x: Float,
+    val y: Float,
+    val size: Int,
+    val alpha: Float,
+    val rotation: Float,
+)
+
+fun parseStickers(json: String): List<NpSticker> = try {
+    val arr = org.json.JSONArray(json)
+    (0 until arr.length()).mapNotNull { i ->
+        val o = arr.optJSONObject(i) ?: return@mapNotNull null
+        val image = o.optString("image", "")
+        if (image.isBlank()) null else NpSticker(
+            image = image,
+            x = o.optDouble("x", 0.5).toFloat().coerceIn(0f, 1f),
+            y = o.optDouble("y", 0.5).toFloat().coerceIn(0f, 1f),
+            size = o.optInt("size", 72).coerceIn(8, 512),
+            alpha = o.optDouble("alpha", 0.8).toFloat().coerceIn(0f, 1f),
+            rotation = o.optDouble("rotation", 0.0).toFloat().coerceIn(-360f, 360f),
+        )
+    }
+} catch (_: Exception) {
+    emptyList()
+}
+
+fun stickersToJson(list: List<NpSticker>): String {
+    val arr = org.json.JSONArray()
+    list.forEach { st ->
+        arr.put(org.json.JSONObject().apply {
+            put("image", st.image)
+            put("x", st.x.toDouble())
+            put("y", st.y.toDouble())
+            put("size", st.size)
+            put("alpha", st.alpha.toDouble())
+            put("rotation", st.rotation.toDouble())
+        })
+    }
+    return arr.toString()
+}
+
 @Composable
 fun FullscreenPlayer(
     theme: ThemeColors,
@@ -847,6 +1007,7 @@ fun FullscreenPlayer(
     bgBrush: Brush,
     bgImg: String,
     bgImgAlpha: Float,
+    customTheme: Boolean,
     defaultShowQueue: Boolean,
     defaultShowLyrics: Boolean,
     onClose: () -> Unit,
@@ -861,6 +1022,30 @@ fun FullscreenPlayer(
     val shuffleOn by Prefs.shuffle(c).collectAsState(initial = false)
     val repeatOn by Prefs.repeat(c).collectAsState(initial = 0)
     val favSong by Prefs.favSong(c).collectAsState(initial = "")
+    val npBgImg by Prefs.npBgImg(c).collectAsState(initial = "")
+    val npBgAlpha by Prefs.npBgAlpha(c).collectAsState(initial = 45)
+    val npBgColor by Prefs.npBgColor(c).collectAsState(initial = "")
+    val npTextColor by Prefs.npTextColor(c).collectAsState(initial = "")
+    val npSubtextColor by Prefs.npSubtextColor(c).collectAsState(initial = "")
+    val npAccentColor by Prefs.npAccentColor(c).collectAsState(initial = "")
+    val npShowCover by Prefs.npShowCover(c).collectAsState(initial = true)
+    val npShowProgress by Prefs.npShowProgress(c).collectAsState(initial = true)
+    val npShowTitle by Prefs.npShowTitle(c).collectAsState(initial = true)
+    val npShowArtist by Prefs.npShowArtist(c).collectAsState(initial = true)
+    val npShowInfo by Prefs.npShowInfo(c).collectAsState(initial = true)
+    val npShowControls by Prefs.npShowControls(c).collectAsState(initial = true)
+    val npShowActions by Prefs.npShowActions(c).collectAsState(initial = true)
+    val npShowQueue by Prefs.npShowQueue(c).collectAsState(initial = true)
+    val npShowLyrics by Prefs.npShowLyrics(c).collectAsState(initial = true)
+    val npMaxWidth by Prefs.npMaxWidth(c).collectAsState(initial = 420)
+    val npStickers by Prefs.npStickers(c).collectAsState(initial = "[]")
+    val npCoverRadius by Prefs.npCoverRadius(c).collectAsState(initial = 0)
+    val npCoverSize by Prefs.npCoverSize(c).collectAsState(initial = 0)
+    val npTitleSize by Prefs.npTitleSize(c).collectAsState(initial = 24)
+    val npArtistSize by Prefs.npArtistSize(c).collectAsState(initial = 15)
+    val npDim by Prefs.npDim(c).collectAsState(initial = 0)
+    val npBgFit by Prefs.npBgFit(c).collectAsState(initial = "crop")
+    val npButtonRadius by Prefs.npButtonRadius(c).collectAsState(initial = 18)
     val index = Playback.player?.currentMediaItemIndex ?: 0
     val cur = queue.getOrNull(index)
     var pos by remember { mutableStateOf(0f) }
@@ -886,14 +1071,68 @@ fun FullscreenPlayer(
     ).joinToString(" · ")
     val queueNext = queue.drop(index + 1)
 
-    Box(
+    val npTheme = if (customTheme) theme.copy(
+        text = parseHexColor(npTextColor, theme.text),
+        subtext = parseHexColor(npSubtextColor, theme.subtext),
+        accent = parseHexColor(npAccentColor, theme.accent),
+    ) else theme
+    val screenBg: Brush = if (customTheme && npBgColor.isNotBlank()) {
+        SolidColor(parseHexColor(npBgColor, theme.bg))
+    } else bgBrush
+    val screenImg = if (customTheme && npBgImg.isNotBlank()) npBgImg else bgImg
+    val screenImgAlpha = if (customTheme && npBgImg.isNotBlank()) {
+        (npBgAlpha / 100f).coerceIn(0f, 1f)
+    } else bgImgAlpha
+    val maxW = (if (customTheme) npMaxWidth else 420).dp.coerceIn(220.dp, 720.dp)
+    val stickers = remember(npStickers, customTheme) { if (customTheme) parseStickers(npStickers) else emptyList() }
+    val showCover = !customTheme || npShowCover
+    val showProgress = !customTheme || npShowProgress
+    val showTitle = !customTheme || npShowTitle
+    val showArtist = !customTheme || npShowArtist
+    val showInfo = !customTheme || npShowInfo
+    val showControls = !customTheme || npShowControls
+    val showActions = !customTheme || npShowActions
+    val showQueueSection = !customTheme || npShowQueue
+    val showLyricsSection = !customTheme || npShowLyrics
+    val coverMax = if (customTheme && npCoverSize > 0) npCoverSize.dp.coerceAtMost(maxW) else maxW
+    val coverShape = if (customTheme && npCoverRadius > 0) RoundedCornerShape(npCoverRadius.dp) else shape
+    val bgScale = when {
+        !customTheme -> ContentScale.Crop
+        npBgFit == "fit" -> ContentScale.Fit
+        npBgFit == "fill" -> ContentScale.FillBounds
+        else -> ContentScale.Crop
+    }
+
+    BoxWithConstraints(
         Modifier.fillMaxSize()
-            .background(bgBrush)
+            .background(screenBg)
             .pointerInput(Unit) { detectTapGestures { } }
     ) {
-        if (bgImg.isNotEmpty()) {
-            AsyncImage(model = bgImg, contentDescription = null,
-                modifier = Modifier.fillMaxSize().alpha(bgImgAlpha), contentScale = ContentScale.Crop)
+        if (screenImg.isNotEmpty()) {
+            AsyncImage(
+                model = screenImg,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().alpha(screenImgAlpha),
+                contentScale = bgScale
+            )
+        }
+        if (customTheme && npDim > 0) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = (npDim / 100f).coerceIn(0f, 1f))))
+        }
+        stickers.forEach { st ->
+            val sizeDp = st.size.dp
+            AsyncImage(
+                model = st.image,
+                contentDescription = null,
+                modifier = Modifier
+                    .offset(x = maxWidth * st.x - sizeDp / 2, y = maxHeight * st.y - sizeDp / 2)
+                    .size(sizeDp)
+                    .graphicsLayer {
+                        alpha = st.alpha
+                        rotationZ = st.rotation
+                    },
+                contentScale = ContentScale.Fit
+            )
         }
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 18.dp),
@@ -901,110 +1140,124 @@ fun FullscreenPlayer(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("now playing", color = theme.subtext, fontSize = 11.sp, letterSpacing = 2.sp)
+                Text("now playing", color = npTheme.subtext, fontSize = 11.sp, letterSpacing = 2.sp)
                 Spacer(Modifier.weight(1f))
-                Text("[ close ]", color = theme.accent, fontSize = 13.sp, modifier = Modifier.clickable { onClose() })
+                Text("[ close ]", color = npTheme.accent, fontSize = 13.sp, modifier = Modifier.clickable { onClose() })
             }
 
-            PanelSurface(theme, shape, Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
-                AsyncImage(
-                    model = cur?.let { albumArtUri(it) } ?: "",
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(formatTime(pos.toLong()), color = theme.subtext, fontSize = 11.sp)
-                Slider(
-                    value = pos.coerceIn(0f, dur),
-                    valueRange = 0f..dur,
-                    onValueChange = { scrubbing = true; pos = it },
-                    onValueChangeFinished = {
-                        Playback.player?.seekTo(pos.toLong())
-                        scrubbing = false
-                    },
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                    colors = SliderDefaults.colors(
-                        thumbColor = theme.accent,
-                        activeTrackColor = theme.accent,
-                        inactiveTrackColor = theme.border
-                    )
-                )
-                Text(formatTime(dur.toLong()), color = theme.subtext, fontSize = 11.sp)
-            }
-
-            Text(curTitle, color = theme.text, fontSize = 24.sp, textAlign = TextAlign.Center,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
-            Text(artist, color = theme.subtext, fontSize = 15.sp, textAlign = TextAlign.Center)
-            Text(info, color = theme.subtext.copy(alpha = 0.8f), fontSize = 11.sp, textAlign = TextAlign.Center)
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(Modifier.size(48.dp).clickable {
-                    val next = (repeatOn + 1) % 3
-                    scope.launch {
-                        Prefs.setRepeat(c, next)
-                        Playback.player?.repeatMode = when (next) {
-                            1 -> androidx.media3.common.Player.REPEAT_MODE_ALL
-                            2 -> androidx.media3.common.Player.REPEAT_MODE_ONE
-                            else -> androidx.media3.common.Player.REPEAT_MODE_OFF
-                        }
-                    }
-                }, contentAlignment = Alignment.Center) {
-                    Icon(
-                        if (repeatOn == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
-                        "repeat",
-                        tint = if (repeatOn > 0) theme.accent else theme.subtext,
-                        modifier = Modifier.size(26.dp)
+            if (showCover) {
+                PanelSurface(npTheme, coverShape, Modifier.widthIn(max = coverMax).fillMaxWidth()) {
+                    AsyncImage(
+                        model = cur?.let { albumArtUri(it) } ?: "",
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                        contentScale = ContentScale.Crop
                     )
                 }
-                Box(Modifier.size(48.dp).clickable { Playback.player?.seekToPreviousMediaItem() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.SkipPrevious, "prev", tint = theme.text, modifier = Modifier.size(30.dp))
+            }
+
+            if (showProgress) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(formatTime(pos.toLong()), color = npTheme.subtext, fontSize = 11.sp)
+                    Slider(
+                        value = pos.coerceIn(0f, dur),
+                        valueRange = 0f..dur,
+                        onValueChange = { scrubbing = true; pos = it },
+                        onValueChangeFinished = {
+                            Playback.player?.seekTo(pos.toLong())
+                            scrubbing = false
+                        },
+                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                        colors = SliderDefaults.colors(
+                            thumbColor = npTheme.accent,
+                            activeTrackColor = npTheme.accent,
+                            inactiveTrackColor = npTheme.border
+                        )
+                    )
+                    Text(formatTime(dur.toLong()), color = npTheme.subtext, fontSize = 11.sp)
                 }
-                Box(
-                    Modifier.size(64.dp).clip(RoundedCornerShape(18.dp)).background(theme.accent).clickable {
-                        Playback.player?.let { if (it.isPlaying) it.pause() else it.play() }
-                    },
-                    contentAlignment = Alignment.Center
+            }
+
+            if (showTitle) {
+                Text(curTitle, color = npTheme.text, fontSize = (if (customTheme) npTitleSize else 24).sp, textAlign = TextAlign.Center,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth())
+            }
+            if (showArtist) Text(artist, color = npTheme.subtext, fontSize = (if (customTheme) npArtistSize else 15).sp, textAlign = TextAlign.Center)
+            if (showInfo) Text(info, color = npTheme.subtext.copy(alpha = 0.8f), fontSize = 11.sp, textAlign = TextAlign.Center)
+
+            if (showControls) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(22.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, "playpause",
-                        tint = theme.bg, modifier = Modifier.size(34.dp))
-                }
-                Box(Modifier.size(48.dp).clickable { Playback.player?.seekToNextMediaItem() }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.SkipNext, "next", tint = theme.text, modifier = Modifier.size(30.dp))
-                }
-                Box(Modifier.size(48.dp).clickable {
-                    scope.launch { Prefs.setShuffle(c, !shuffleOn); Playback.player?.shuffleModeEnabled = !shuffleOn }
-                }, contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Shuffle, "shuffle", tint = if (shuffleOn) theme.accent else theme.subtext, modifier = Modifier.size(26.dp))
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (showLyrics) "[ lyrics ]" else " lyrics ", color = if (showLyrics) theme.accent else theme.subtext,
-                    fontSize = 13.sp, modifier = Modifier.clickable { showLyrics = !showLyrics })
-                Text(if (showQueue) "[ queue ]" else " queue ", color = if (showQueue) theme.accent else theme.subtext,
-                    fontSize = 13.sp, modifier = Modifier.clickable { showQueue = !showQueue })
-                Text(
-                    if (favSong == curTitle && curTitle.isNotEmpty()) "★ favorite" else "☆ favorite",
-                    color = if (favSong == curTitle && curTitle.isNotEmpty()) theme.accent else theme.subtext,
-                    fontSize = 13.sp,
-                    modifier = Modifier.clickable {
-                        if (curTitle.isNotEmpty()) scope.launch {
-                            Prefs.setFavSong(c, if (favSong == curTitle) "" else curTitle)
+                    Box(Modifier.size(48.dp).clickable {
+                        val next = (repeatOn + 1) % 3
+                        scope.launch {
+                            Prefs.setRepeat(c, next)
+                            Playback.player?.repeatMode = when (next) {
+                                1 -> androidx.media3.common.Player.REPEAT_MODE_ALL
+                                2 -> androidx.media3.common.Player.REPEAT_MODE_ONE
+                                else -> androidx.media3.common.Player.REPEAT_MODE_OFF
+                            }
                         }
+                    }, contentAlignment = Alignment.Center) {
+                        Icon(
+                            if (repeatOn == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                            "repeat",
+                            tint = if (repeatOn > 0) npTheme.accent else npTheme.subtext,
+                            modifier = Modifier.size(26.dp)
+                        )
                     }
-                )
+                    Box(Modifier.size(48.dp).clickable { Playback.player?.seekToPreviousMediaItem() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.SkipPrevious, "prev", tint = npTheme.text, modifier = Modifier.size(30.dp))
+                    }
+                    Box(
+                        Modifier.size(64.dp).clip(RoundedCornerShape(if (customTheme) npButtonRadius.dp else 18.dp)).background(npTheme.accent).clickable {
+                            Playback.player?.let { if (it.isPlaying) it.pause() else it.play() }
+                        },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, "playpause",
+                            tint = npTheme.bg, modifier = Modifier.size(34.dp))
+                    }
+                    Box(Modifier.size(48.dp).clickable { Playback.player?.seekToNextMediaItem() }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.SkipNext, "next", tint = npTheme.text, modifier = Modifier.size(30.dp))
+                    }
+                    Box(Modifier.size(48.dp).clickable {
+                        scope.launch { Prefs.setShuffle(c, !shuffleOn); Playback.player?.shuffleModeEnabled = !shuffleOn }
+                    }, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Shuffle, "shuffle", tint = if (shuffleOn) npTheme.accent else npTheme.subtext, modifier = Modifier.size(26.dp))
+                    }
+                }
             }
 
-            if (showQueue && queueNext.isNotEmpty()) {
-                Column(Modifier.fillMaxWidth().widthIn(max = 420.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("up next", color = theme.subtext, fontSize = 10.sp, letterSpacing = 1.sp)
+            if (showActions && (showLyricsSection || showQueueSection || curTitle.isNotEmpty())) {
+                Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (showLyricsSection) {
+                        Text(if (showLyrics) "[ lyrics ]" else " lyrics ", color = if (showLyrics) npTheme.accent else npTheme.subtext,
+                            fontSize = 13.sp, modifier = Modifier.clickable { showLyrics = !showLyrics })
+                    }
+                    if (showQueueSection) {
+                        Text(if (showQueue) "[ queue ]" else " queue ", color = if (showQueue) npTheme.accent else npTheme.subtext,
+                            fontSize = 13.sp, modifier = Modifier.clickable { showQueue = !showQueue })
+                    }
+                    Text(
+                        if (favSong == curTitle && curTitle.isNotEmpty()) "★ favorite" else "☆ favorite",
+                        color = if (favSong == curTitle && curTitle.isNotEmpty()) npTheme.accent else npTheme.subtext,
+                        fontSize = 13.sp,
+                        modifier = Modifier.clickable {
+                            if (curTitle.isNotEmpty()) scope.launch {
+                                Prefs.setFavSong(c, if (favSong == curTitle) "" else curTitle)
+                            }
+                        }
+                    )
+                }
+            }
+
+            if (showQueueSection && showQueue && queueNext.isNotEmpty()) {
+                Column(Modifier.fillMaxWidth().widthIn(max = maxW), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("up next", color = npTheme.subtext, fontSize = 10.sp, letterSpacing = 1.sp)
                     queueNext.take(20).forEachIndexed { i, s ->
                         Row(
                             Modifier.fillMaxWidth().clickable {
@@ -1016,18 +1269,18 @@ fun FullscreenPlayer(
                                 modifier = Modifier.size(30.dp).clip(shape))
                             Spacer(Modifier.width(8.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(s.title, color = theme.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(s.artist, color = theme.subtext, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(s.title, color = npTheme.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(s.artist, color = npTheme.subtext, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Text(formatTime(s.durationMs), color = theme.subtext, fontSize = 11.sp)
+                            Text(formatTime(s.durationMs), color = npTheme.subtext, fontSize = 11.sp)
                         }
                     }
                 }
             }
 
-            if (showLyrics) {
-                Box(Modifier.fillMaxWidth().widthIn(max = 420.dp)) {
-                    LyricsBlock(theme, pos, expanded = true)
+            if (showLyricsSection && showLyrics) {
+                Box(Modifier.fillMaxWidth().widthIn(max = maxW)) {
+                    LyricsBlock(npTheme, pos, expanded = true)
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -1106,7 +1359,8 @@ fun HomeTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape, we
     var nameField by remember(profileName) { mutableStateOf(profileName) }
     val topSongs = remember(songs) { Stats.topSongs(c) }
     val topSongList = remember(topSongs, songs) {
-        topSongs.mapNotNull { s -> songs.firstOrNull { it.path == s.first } }
+        val byKey = songs.associateBy { Stats.songKey(it) }
+        topSongs.mapNotNull { s -> byKey[s.first] ?: songs.firstOrNull { it.path == s.first } }
     }
     val recent = remember(songs) { songs.sortedByDescending { it.dateAdded }.take(10) }
     val albums = remember(songs) { songs.groupBy { it.album } }
@@ -1186,8 +1440,10 @@ fun HomeTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape, we
             }
         }
 
-        val lastPath = remember { Stats.lastPlayedPath(c) }
-        val lastSong = remember(songs, lastPath) { songs.firstOrNull { it.path == lastPath } }
+        val lastKey = remember { Stats.lastPlayedKey(c) }
+        val lastSong = remember(songs, lastKey) {
+            songs.firstOrNull { Stats.songKey(it) == lastKey } ?: songs.firstOrNull { it.path == lastKey }
+        }
         if (lastSong != null) Panel("last played", theme, shape = shape) {
             Text("${lastSong.title} — ${lastSong.artist}", color = theme.text, fontSize = 13.sp,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -1257,12 +1513,12 @@ fun SongsTab(songs: List<Song>, theme: ThemeColors, shape: RoundedCornerShape) {
             it.title.contains(query, ignoreCase = true) || it.artist.contains(query, ignoreCase = true) || it.album.contains(query, ignoreCase = true)
         }
     }
-    val playsMap = remember(c) { Stats.topSongs(c, Int.MAX_VALUE).toMap() }
+    val playsMap = remember(c, songs) { Stats.topSongs(c, Int.MAX_VALUE).toMap() }
     var sortMode by remember { mutableStateOf(0) }
     val shownSorted = remember(shown, sortMode, playsMap) {
         when (sortMode) {
             1 -> shown.sortedBy { it.year.toIntOrNull() ?: Int.MAX_VALUE }
-            2 -> shown.sortedByDescending { playsMap[it.path] ?: 0 }
+            2 -> shown.sortedByDescending { playsMap[Stats.songKey(it)] ?: playsMap[it.path] ?: 0 }
             else -> shown
         }
     }
@@ -1647,11 +1903,10 @@ fun StatsTab(songs: List<Song>, theme: ThemeColors) {
     var importText by remember { mutableStateOf("") }
     var showImport by remember { mutableStateOf(false) }
     var topArtists by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
-    val byPath = remember(songs) { songs.associateBy { it.path } }
-    fun songLabel(path: String): String {
-        val song = byPath[path]
-        return if (song != null) "${song.title} · ${song.artist}"
-        else path.substringAfterLast('/').substringBeforeLast('.')
+    val byKey = remember(songs) { songs.associateBy { Stats.songKey(it) } }
+    fun songLabel(key: String): String {
+        val song = byKey[key]
+        return if (song != null) "${song.title} · ${song.artist}" else Stats.label(key)
     }
     fun refreshStats() {
         top = Stats.topSongs(c)
@@ -1665,7 +1920,7 @@ fun StatsTab(songs: List<Song>, theme: ThemeColors) {
             scope.launch {
                 try {
                     val text = c.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: ""
-                    Stats.importJson(c, text)
+                    Stats.importJson(c, text, songs)
                     refreshStats()
                     showImport = false
                 } catch (_: Exception) {}
@@ -1695,7 +1950,7 @@ fun StatsTab(songs: List<Song>, theme: ThemeColors) {
             if (showImport) {
                 OutlinedTextField(value = importText, onValueChange = { importText = it }, label = { Text(L.tr(LocalContext.current, "paste json")) },
                     modifier = Modifier.fillMaxWidth().height(160.dp))
-                Button(onClick = { Stats.importJson(c, importText); showImport = false }) { Text(L.tr(LocalContext.current, "import")) }
+                Button(onClick = { Stats.importJson(c, importText, songs); showImport = false }) { Text(L.tr(LocalContext.current, "import")) }
             }
         }
     }
@@ -1758,6 +2013,40 @@ fun SettingsTab(
     }
     val pickSquare = rememberCroppedImagePicker("square", 16f / 9f, theme) { path ->
         scope.launch { Prefs.setCustomSquareImg(c, path) }
+    }
+    var pendingThemeExport by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var themeFileMsg by remember { mutableStateOf("") }
+    val themeExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        val pending = pendingThemeExport
+        if (uri != null && pending != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    val text = if (pending.second == "__current__") {
+                        ThemeStore.exportCurrent(c, pending.first)
+                    } else {
+                        ThemeStore.exportStored(c, pending.second, pending.first)
+                    }
+                    c.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) }
+                    withContext(Dispatchers.Main) { themeFileMsg = "saved ${pending.first}.json" }
+                } catch (_: Exception) {
+                    withContext(Dispatchers.Main) { themeFileMsg = "theme export failed" }
+                }
+            }
+        }
+        pendingThemeExport = null
+    }
+    val themeImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val text = c.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: ""
+                    val name = ThemeStore.importTheme(c, text)
+                    themeFileMsg = if (name != null) "imported $name" else "not a croviera theme"
+                } catch (_: Exception) {
+                    themeFileMsg = "theme import failed"
+                }
+            }
+        }
     }
     val gradientState by Prefs.gradient(c).collectAsState(initial = Prefs.GradientPrefs("", "", 135))
     var gradStart by remember(gradientState) { mutableStateOf(gradientState.start.ifBlank { customBg }) }
@@ -1823,6 +2112,17 @@ fun SettingsTab(
                         val obj = org.json.JSONObject(existing)
                         obj.keys().asSequence().toList()
                     } catch (e: Exception) { emptyList() }
+                }
+                Text("start from an included theme (copies its colors into Custom)", color = theme.subtext, fontSize = 10.sp)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Themes.all.forEach { base ->
+                        Text(
+                            "[${base.name}]",
+                            color = theme.accent,
+                            fontSize = 10.sp,
+                            modifier = Modifier.clickable { scope.launch { ThemeStore.applyBase(c, base.name) } }.padding(vertical = 4.dp)
+                        )
+                    }
                 }
                 Row(Modifier.fillMaxWidth()) {
                     Text("color picks", color = theme.subtext, fontSize = 11.sp, modifier = Modifier.weight(1f))
@@ -1930,16 +2230,28 @@ fun SettingsTab(
                 Row(Modifier.fillMaxWidth()) {
                     OutlinedTextField(value = newThemeName, onValueChange = { newThemeName = it }, label = { Text("save as…") }, modifier = Modifier.weight(1f))
                     TextButton(onClick = {
-                        if (newThemeName.isNotBlank()) {
-                            val j = try { org.json.JSONObject(existing) } catch (e: Exception) { org.json.JSONObject() }
-                            val savedGradStart = if (gradientOn) gradStart.trimStart('#') else ""
-                            val savedGradEnd = if (gradientOn) gradEnd.trimStart('#') else ""
-                            j.put(newThemeName, "${customBg.trimStart('#')}|${customSurface.trimStart('#')}|${customText.trimStart('#')}|${customSubtext.trimStart('#')}|${customAccent.trimStart('#')}|${customBorder.trimStart('#')}|$savedGradStart|$savedGradEnd|$gradAngle|${customBgImg}|${customSquareImg}")
-                            scope.launch { Prefs.setSavedCustomThemes(c, j.toString()) }
+                        val nm = newThemeName.trim()
+                        if (nm.isNotBlank()) {
+                            scope.launch {
+                                val j = try { org.json.JSONObject(Prefs.savedCustomThemes(c).first()) } catch (e: Exception) { org.json.JSONObject() }
+                                j.put(nm, ThemeStore.captureJson(c, nm))
+                                Prefs.setSavedCustomThemes(c, j.toString())
+                            }
                             newThemeName = ""
                         }
                     }) { Text("[ save ]") }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = {
+                        pendingThemeExport = "custom theme" to "__current__"
+                        themeExportLauncher.launch("croviera-theme.json")
+                    }) { Text("[ export theme file ]") }
+                    TextButton(onClick = {
+                        themeImportLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                    }) { Text("[ import theme file ]") }
+                }
+                Text("theme files embed their images and every custom-theme knob, including shadows, fullscreen and top-bar settings.", color = theme.subtext, fontSize = 10.sp)
+                if (themeFileMsg.isNotEmpty()) Text(themeFileMsg, color = theme.accent, fontSize = 11.sp)
                 if (savedNames.isNotEmpty()) {
                     Text("saved themes:", color = theme.subtext, fontSize = 11.sp)
                     Row(Modifier.horizontalScroll(rememberScrollState())) {
@@ -1949,29 +2261,17 @@ fun SettingsTab(
                                 Surface(
                                     Modifier.padding(end = 4.dp, bottom = 4.dp).clickable {
                                         val j = try { org.json.JSONObject(existing) } catch (e: Exception) { org.json.JSONObject() }
-                                        val list = j.optString(name, "").split("|", limit = 11)
-                                        if (list.size >= 6) {
-                                            scope.launch {
-                                                Prefs.setCustom(c, "#" + list[0], "#" + list[1], "#" + list[2], "#" + list[3], "#" + list[4], "#" + list[5])
-                                                if (list.size >= 10) {
-                                                    Prefs.setGradient(
-                                                        c,
-                                                        if (list[6].isNotBlank()) "#" + list[6] else "",
-                                                        if (list[7].isNotBlank()) "#" + list[7] else "",
-                                                        list[8].toIntOrNull() ?: 135
-                                                    )
-                                                    Prefs.setCustomBgImg(c, list[9])
-                                                } else {
-                                                    Prefs.setGradient(c, "", "", 135)
-                                                    Prefs.setCustomBgImg(c, "")
-                                                }
-                                                Prefs.setCustomSquareImg(c, list.getOrNull(10).orEmpty())
-                                            }
-                                        }
+                                        scope.launch { ThemeStore.applyStored(c, j.optString(name, "")) }
                                     },
                                     color = theme.surface,
                                     shape = RoundedCornerShape(0.dp)
                                 ) { Text(name, color = theme.text, modifier = Modifier.padding(8.dp), fontSize = 11.sp) }
+                                Text("[file]", color = theme.accent, fontSize = 10.sp, modifier = Modifier.clickable {
+                                    val j = try { org.json.JSONObject(existing) } catch (e: Exception) { org.json.JSONObject() }
+                                    pendingThemeExport = name to j.optString(name, "")
+                                    val safe = name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(40).ifBlank { "theme" }
+                                    themeExportLauncher.launch("$safe.json")
+                                }.padding(end = 6.dp, bottom = 4.dp))
                                 Text("✕", color = theme.subtext, fontSize = 12.sp, modifier = Modifier.clickable { confirmDelete = true }.padding(end = 8.dp, bottom = 4.dp))
                             }
                             if (confirmDelete) {
@@ -2049,39 +2349,66 @@ fun SettingsTab(
             Text("border width: ${borderWidth}dp", color = theme.text, fontSize = 13.sp)
             Slider(value = borderWidth.toFloat(), onValueChange = { v -> scope.launch { Prefs.setBorderWidth(c, v.toInt().coerceIn(0, 4)) } },
                 valueRange = 0f..4f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
-            val shadowOn by Prefs.panelShadow(c).collectAsState(initial = false)
-            val shadowColor by Prefs.panelShadowColor(c).collectAsState(initial = "#8A1F2D")
-            val shadowOffset by Prefs.panelShadowOffset(c).collectAsState(initial = 4)
-            val shadowAlpha by Prefs.panelShadowAlpha(c).collectAsState(initial = 55)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("colored shadow below panels", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Switch(checked = shadowOn, onCheckedChange = { scope.launch { Prefs.setPanelShadow(c, it) } })
-            }
-            if (shadowOn) {
-                Text("shadow color", color = theme.subtext, fontSize = 11.sp)
-                ColorSliderPicker(current = shadowColor, onPick = { hex ->
-                    scope.launch { Prefs.setPanelShadowColor(c, hex) }
-                })
-                Text("shadow offset: ${shadowOffset}dp", color = theme.text, fontSize = 12.sp)
-                Slider(value = shadowOffset.toFloat(), onValueChange = { v ->
-                    scope.launch { Prefs.setPanelShadowOffset(c, v.toInt().coerceIn(1, 16)) }
-                }, valueRange = 1f..16f,
-                    colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
-                Text("shadow opacity: ${shadowAlpha}%", color = theme.text, fontSize = 12.sp)
-                Slider(value = shadowAlpha.toFloat(), onValueChange = { v ->
-                    scope.launch { Prefs.setPanelShadowAlpha(c, v.toInt().coerceIn(0, 100)) }
-                }, valueRange = 0f..100f,
-                    colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            if (themeName == "Custom") {
+                val shadowOn by Prefs.panelShadow(c).collectAsState(initial = false)
+                val shadowColor by Prefs.panelShadowColor(c).collectAsState(initial = "#8A1F2D")
+                val shadowOffset by Prefs.panelShadowOffset(c).collectAsState(initial = 4)
+                val shadowAlpha by Prefs.panelShadowAlpha(c).collectAsState(initial = 55)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("colored shadow below panels", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = shadowOn, onCheckedChange = { scope.launch { Prefs.setPanelShadow(c, it) } })
+                }
+                if (shadowOn) {
+                    Text("shadow color", color = theme.subtext, fontSize = 11.sp)
+                    ColorSliderPicker(current = shadowColor, onPick = { hex ->
+                        scope.launch { Prefs.setPanelShadowColor(c, hex) }
+                    })
+                    Text("shadow offset: ${shadowOffset}dp", color = theme.text, fontSize = 12.sp)
+                    Slider(value = shadowOffset.toFloat(), onValueChange = { v ->
+                        scope.launch { Prefs.setPanelShadowOffset(c, v.toInt().coerceIn(1, 16)) }
+                    }, valueRange = 1f..16f,
+                        colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                    Text("shadow opacity: ${shadowAlpha}%", color = theme.text, fontSize = 12.sp)
+                    Slider(value = shadowAlpha.toFloat(), onValueChange = { v ->
+                        scope.launch { Prefs.setPanelShadowAlpha(c, v.toInt().coerceIn(0, 100)) }
+                    }, valueRange = 0f..100f,
+                        colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                }
+            } else {
+                Text("panel shadows are available in the Custom theme.", color = theme.subtext, fontSize = 11.sp)
             }
         }
 
-        Panel("navigation", theme, shape = RoundedCornerShape(0.dp)) {
+        Panel("navigation / top bar", theme, shape = RoundedCornerShape(0.dp)) {
             val navPosition by Prefs.navPosition(c).collectAsState(initial = "top")
             val navNerd by Prefs.navNerd(c).collectAsState(initial = false)
             val navLabelsJson by Prefs.navLabels(c).collectAsState(initial = "{}")
             val navIconsJson by Prefs.navIcons(c).collectAsState(initial = "{}")
+            val navImagesJson by Prefs.navButtonImages(c).collectAsState(initial = "{}")
+            val navImageSize by Prefs.navImageSize(c).collectAsState(initial = 28)
+            val navItemWidth by Prefs.navItemWidth(c).collectAsState(initial = 0)
+            val navItemHeight by Prefs.navItemHeight(c).collectAsState(initial = 0)
+            val navItemSpacing by Prefs.navItemSpacing(c).collectAsState(initial = 2)
+            val navPadding by Prefs.navPadding(c).collectAsState(initial = 4)
+            val navThickness by Prefs.navBarThickness(c).collectAsState(initial = 0)
+            val navBgAlpha by Prefs.navBgAlpha(c).collectAsState(initial = 94)
+            val navBgColor by Prefs.navBgColor(c).collectAsState(initial = "")
+            val navImageFit by Prefs.navImageFit(c).collectAsState(initial = "crop")
+            val navTextSize by Prefs.navTextSize(c).collectAsState(initial = 14)
+            val navNerdSize by Prefs.navNerdSize(c).collectAsState(initial = 20)
+            val navSelectedAlpha by Prefs.navSelectedAlpha(c).collectAsState(initial = 14)
             var labels by remember(navLabelsJson) { mutableStateOf(parseStringMap(navLabelsJson)) }
             var icons by remember(navIconsJson) { mutableStateOf(parseStringMap(navIconsJson)) }
+            var images by remember(navImagesJson) { mutableStateOf(parseStringMap(navImagesJson)) }
+            var navImageTarget by remember { mutableStateOf<String?>(null) }
+            val pickNavImage = rememberCroppedImagePicker("nav", 1f, theme) { path ->
+                val target = navImageTarget
+                if (target != null) {
+                    images = images.toMutableMap().apply { put(target, path) }
+                    scope.launch { Prefs.setNavButtonImages(c, mapToJson(images)) }
+                }
+                navImageTarget = null
+            }
             Text("position", color = theme.subtext, fontSize = 11.sp)
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf("top", "bottom", "left", "right").forEach { pos ->
@@ -2092,6 +2419,82 @@ fun SettingsTab(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("nerd font icons instead of text", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Switch(checked = navNerd, onCheckedChange = { scope.launch { Prefs.setNavNerd(c, it) } })
+            }
+            Text("button images (they replace the label/icon)", color = theme.subtext, fontSize = 11.sp)
+            TAB_NAMES.forEach { name ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("~/$name", color = theme.subtext, fontSize = 10.sp, modifier = Modifier.width(64.dp))
+                    val img = images[name].orEmpty()
+                    if (img.isNotEmpty()) {
+                        AsyncImage(model = img, contentDescription = null, modifier = Modifier.size(24.dp).clip(RoundedCornerShape(0.dp)), contentScale = ContentScale.Crop)
+                    }
+                    TextButton(onClick = { navImageTarget = name; pickNavImage() }) { Text(if (img.isEmpty()) "[ pick ]" else "[ change ]", fontSize = 10.sp) }
+                    if (img.isNotEmpty()) {
+                        Text("[x]", color = theme.subtext, fontSize = 10.sp, modifier = Modifier.clickable {
+                            images = images.toMutableMap().apply { remove(name) }
+                            scope.launch { Prefs.setNavButtonImages(c, mapToJson(images)) }
+                        })
+                    }
+                }
+            }
+            Text("button size", color = theme.subtext, fontSize = 11.sp)
+            Text("image size: ${navImageSize}dp", color = theme.text, fontSize = 12.sp)
+            Slider(value = navImageSize.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNavImageSize(c, v.toInt().coerceIn(12, 96)) }
+            }, valueRange = 12f..96f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("item width: ${if (navItemWidth == 0) "auto" else "${navItemWidth}dp"}", color = theme.text, fontSize = 12.sp)
+            Slider(value = navItemWidth.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNavItemWidth(c, v.toInt().coerceIn(0, 240)) }
+            }, valueRange = 0f..240f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("item height: ${if (navItemHeight == 0) "auto" else "${navItemHeight}dp"}", color = theme.text, fontSize = 12.sp)
+            Slider(value = navItemHeight.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNavItemHeight(c, v.toInt().coerceIn(0, 160)) }
+            }, valueRange = 0f..160f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("bar thickness: ${if (navThickness == 0) "auto (fits items)" else "${navThickness}dp"}", color = theme.text, fontSize = 12.sp)
+            Slider(value = navThickness.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNavBarThickness(c, v.toInt().coerceIn(0, 240)) }
+            }, valueRange = 0f..240f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("item spacing: ${navItemSpacing}dp", color = theme.text, fontSize = 12.sp)
+            Slider(value = navItemSpacing.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNavItemSpacing(c, v.toInt().coerceIn(0, 24)) }
+            }, valueRange = 0f..24f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("bar padding: ${navPadding}dp", color = theme.text, fontSize = 12.sp)
+            Slider(value = navPadding.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNavPadding(c, v.toInt().coerceIn(0, 24)) }
+            }, valueRange = 0f..24f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            if (themeName == "Custom") {
+                Text("bar opacity: ${navBgAlpha}%", color = theme.text, fontSize = 12.sp)
+                Slider(value = navBgAlpha.toFloat(), onValueChange = { v ->
+                    scope.launch { Prefs.setNavBgAlpha(c, v.toInt().coerceIn(0, 100)) }
+                }, valueRange = 0f..100f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                Text("selected item wash: ${navSelectedAlpha}%", color = theme.text, fontSize = 12.sp)
+                Slider(value = navSelectedAlpha.toFloat(), onValueChange = { v ->
+                    scope.launch { Prefs.setNavSelectedAlpha(c, v.toInt().coerceIn(0, 60)) }
+                }, valueRange = 0f..60f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            } else {
+                Text("bar color, opacity and selected wash are Custom-theme styling.", color = theme.subtext, fontSize = 11.sp)
+            }
+            Text("image fit", color = theme.subtext, fontSize = 11.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("crop", "fit", "fill").forEach { fit ->
+                    Text(if (navImageFit == fit) "[$fit]" else " $fit ", color = if (navImageFit == fit) theme.accent else theme.text,
+                        fontSize = 13.sp, modifier = Modifier.clickable { scope.launch { Prefs.setNavImageFit(c, fit) } }.padding(vertical = 4.dp))
+                }
+            }
+            Text("text size: ${navTextSize}sp", color = theme.text, fontSize = 12.sp)
+            Slider(value = navTextSize.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNavTextSize(c, v.toInt().coerceIn(8, 32)) }
+            }, valueRange = 8f..32f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("nerd glyph size: ${navNerdSize}sp", color = theme.text, fontSize = 12.sp)
+            Slider(value = navNerdSize.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNavNerdSize(c, v.toInt().coerceIn(10, 48)) }
+            }, valueRange = 10f..48f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            if (themeName == "Custom") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("bar color", color = theme.subtext, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    if (navBgColor.isNotBlank()) Text("[theme default]", color = theme.accent, fontSize = 10.sp, modifier = Modifier.clickable { scope.launch { Prefs.setNavBgColor(c, "") } })
+                }
+                ColorSliderPicker(current = navBgColor, onPick = { hex -> scope.launch { Prefs.setNavBgColor(c, hex) } })
             }
             Text("rename buttons / paste a nerd-font glyph", color = theme.subtext, fontSize = 11.sp)
             TAB_NAMES.forEach { name ->
@@ -2137,6 +2540,174 @@ fun SettingsTab(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("show lyrics in fullscreen", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Switch(checked = npLyrics, onCheckedChange = { scope.launch { Prefs.setNpExpandedLyrics(c, it) } })
+            }
+
+            if (themeName == "Custom") {
+            Text("custom fullscreen look (Custom theme)", color = theme.accent, fontSize = 12.sp)
+            Text("colors, background, element toggles and stickers below are saved with the Custom theme and exported theme files.", color = theme.subtext, fontSize = 10.sp)
+
+            val npBgImg by Prefs.npBgImg(c).collectAsState(initial = "")
+            val npBgAlpha by Prefs.npBgAlpha(c).collectAsState(initial = 45)
+            val npBgColor by Prefs.npBgColor(c).collectAsState(initial = "")
+            val npTextColor by Prefs.npTextColor(c).collectAsState(initial = "")
+            val npSubtextColor by Prefs.npSubtextColor(c).collectAsState(initial = "")
+            val npAccentColor by Prefs.npAccentColor(c).collectAsState(initial = "")
+            val npMaxWidth by Prefs.npMaxWidth(c).collectAsState(initial = 420)
+            val npCoverRadius by Prefs.npCoverRadius(c).collectAsState(initial = 0)
+            val npCoverSize by Prefs.npCoverSize(c).collectAsState(initial = 0)
+            val npTitleSize by Prefs.npTitleSize(c).collectAsState(initial = 24)
+            val npArtistSize by Prefs.npArtistSize(c).collectAsState(initial = 15)
+            val npDim by Prefs.npDim(c).collectAsState(initial = 0)
+            val npBgFit by Prefs.npBgFit(c).collectAsState(initial = "crop")
+            val npButtonRadius by Prefs.npButtonRadius(c).collectAsState(initial = 18)
+            val pickNpBg = rememberCroppedImagePicker("fullscreen_bg", 9f / 16f, theme) { path ->
+                scope.launch { Prefs.setNpBgImg(c, path) }
+            }
+            Text("fullscreen background image", color = theme.text, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { pickNpBg() }) { Text(if (npBgImg.isEmpty()) "[ pick bg ]" else "[ change bg ]") }
+                if (npBgImg.isNotEmpty()) TextButton(onClick = { scope.launch { Prefs.setNpBgImg(c, "") } }) { Text("[ clear ]") }
+                Text(if (npBgImg.isEmpty()) "none" else "set", color = theme.subtext, fontSize = 11.sp)
+            }
+            if (npBgImg.isNotEmpty()) {
+                Text("fullscreen bg opacity: ${npBgAlpha}%", color = theme.text, fontSize = 12.sp)
+                Slider(value = npBgAlpha.toFloat(), onValueChange = { v ->
+                    scope.launch { Prefs.setNpBgAlpha(c, v.toInt().coerceIn(0, 100)) }
+                }, valueRange = 0f..100f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("fullscreen background color", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                if (npBgColor.isNotBlank()) Text("[theme default]", color = theme.accent, fontSize = 10.sp, modifier = Modifier.clickable { scope.launch { Prefs.setNpBgColor(c, "") } })
+            }
+            ColorSliderPicker(current = npBgColor, onPick = { hex -> scope.launch { Prefs.setNpBgColor(c, hex) } })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("fullscreen text color", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                if (npTextColor.isNotBlank()) Text("[theme default]", color = theme.accent, fontSize = 10.sp, modifier = Modifier.clickable { scope.launch { Prefs.setNpTextColor(c, "") } })
+            }
+            ColorSliderPicker(current = npTextColor, onPick = { hex -> scope.launch { Prefs.setNpTextColor(c, hex) } })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("fullscreen subtext color", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                if (npSubtextColor.isNotBlank()) Text("[theme default]", color = theme.accent, fontSize = 10.sp, modifier = Modifier.clickable { scope.launch { Prefs.setNpSubtextColor(c, "") } })
+            }
+            ColorSliderPicker(current = npSubtextColor, onPick = { hex -> scope.launch { Prefs.setNpSubtextColor(c, hex) } })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("fullscreen accent color", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                if (npAccentColor.isNotBlank()) Text("[theme default]", color = theme.accent, fontSize = 10.sp, modifier = Modifier.clickable { scope.launch { Prefs.setNpAccentColor(c, "") } })
+            }
+            ColorSliderPicker(current = npAccentColor, onPick = { hex -> scope.launch { Prefs.setNpAccentColor(c, hex) } })
+            Text("content max width: ${npMaxWidth}dp", color = theme.text, fontSize = 12.sp)
+            Slider(value = npMaxWidth.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNpMaxWidth(c, v.toInt().coerceIn(220, 720)) }
+            }, valueRange = 220f..720f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+
+            Text("cover corner radius: ${if (npCoverRadius == 0) "theme shape" else "${npCoverRadius}dp"}", color = theme.text, fontSize = 12.sp)
+            Slider(value = npCoverRadius.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNpCoverRadius(c, v.toInt().coerceIn(0, 48)) }
+            }, valueRange = 0f..48f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("cover max size: ${if (npCoverSize == 0) "full width" else "${npCoverSize}dp"}", color = theme.text, fontSize = 12.sp)
+            Slider(value = npCoverSize.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNpCoverSize(c, v.toInt().coerceIn(0, 480)) }
+            }, valueRange = 0f..480f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("title size: ${npTitleSize}sp", color = theme.text, fontSize = 12.sp)
+            Slider(value = npTitleSize.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNpTitleSize(c, v.toInt().coerceIn(14, 40)) }
+            }, valueRange = 14f..40f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("artist size: ${npArtistSize}sp", color = theme.text, fontSize = 12.sp)
+            Slider(value = npArtistSize.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNpArtistSize(c, v.toInt().coerceIn(10, 28)) }
+            }, valueRange = 10f..28f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("background dim: ${npDim}%", color = theme.text, fontSize = 12.sp)
+            Slider(value = npDim.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNpDim(c, v.toInt().coerceIn(0, 80)) }
+            }, valueRange = 0f..80f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+            Text("background image fit", color = theme.subtext, fontSize = 11.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf("crop", "fit", "fill").forEach { fit ->
+                    Text(if (npBgFit == fit) "[$fit]" else " $fit ", color = if (npBgFit == fit) theme.accent else theme.text,
+                        fontSize = 13.sp, modifier = Modifier.clickable { scope.launch { Prefs.setNpBgFit(c, fit) } }.padding(vertical = 4.dp))
+                }
+            }
+            Text("play button corner radius: ${npButtonRadius}dp", color = theme.text, fontSize = 12.sp)
+            Slider(value = npButtonRadius.toFloat(), onValueChange = { v ->
+                scope.launch { Prefs.setNpButtonRadius(c, v.toInt().coerceIn(0, 32)) }
+            }, valueRange = 0f..32f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+
+            Text("show / hide elements", color = theme.subtext, fontSize = 11.sp)
+            val showCover by Prefs.npShowCover(c).collectAsState(initial = true)
+            val showProgress by Prefs.npShowProgress(c).collectAsState(initial = true)
+            val showTitle by Prefs.npShowTitle(c).collectAsState(initial = true)
+            val showArtist by Prefs.npShowArtist(c).collectAsState(initial = true)
+            val showInfo by Prefs.npShowInfo(c).collectAsState(initial = true)
+            val showControls by Prefs.npShowControls(c).collectAsState(initial = true)
+            val showActions by Prefs.npShowActions(c).collectAsState(initial = true)
+            val showQueueSection by Prefs.npShowQueue(c).collectAsState(initial = true)
+            val showLyricsSection by Prefs.npShowLyrics(c).collectAsState(initial = true)
+            listOf(
+                Triple("cover", showCover, Prefs::setNpShowCover),
+                Triple("progress bar", showProgress, Prefs::setNpShowProgress),
+                Triple("title", showTitle, Prefs::setNpShowTitle),
+                Triple("artist", showArtist, Prefs::setNpShowArtist),
+                Triple("format/year info", showInfo, Prefs::setNpShowInfo),
+                Triple("playback controls", showControls, Prefs::setNpShowControls),
+                Triple("lyrics/queue/favorite row", showActions, Prefs::setNpShowActions),
+                Triple("queue section", showQueueSection, Prefs::setNpShowQueue),
+                Triple("lyrics section", showLyricsSection, Prefs::setNpShowLyrics),
+            ).forEach { (label, checked, setter) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(label, color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    Switch(checked = checked, onCheckedChange = { on -> scope.launch { setter(c, on) } })
+                }
+            }
+
+            val stickersJson by Prefs.npStickers(c).collectAsState(initial = "[]")
+            var stickers by remember { mutableStateOf(parseStickers(stickersJson)) }
+            LaunchedEffect(stickersJson) { stickers = parseStickers(stickersJson) }
+            fun saveStickers(next: List<NpSticker>) {
+                stickers = next
+                scope.launch { Prefs.setNpStickers(c, stickersToJson(next)) }
+            }
+            val pickSticker = rememberCroppedImagePicker("sticker", 1f, theme) { path ->
+                saveStickers(stickers + NpSticker(path, 0.5f, 0.5f, 72, 0.85f, 0f))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("stickers: ${stickers.size}", color = theme.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { pickSticker() }) { Text("[ add sticker ]") }
+            }
+            Text("stickers are placed over the fullscreen background. drag the sliders to position them.", color = theme.subtext, fontSize = 10.sp)
+            stickers.forEachIndexed { idx, st ->
+                Column(Modifier.fillMaxWidth().border(LocalBorderWidth.current, theme.border).padding(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AsyncImage(model = st.image, contentDescription = null, modifier = Modifier.size(32.dp).clip(RoundedCornerShape(0.dp)), contentScale = ContentScale.Fit)
+                        Spacer(Modifier.width(8.dp))
+                        Text("sticker ${idx + 1}", color = theme.text, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text("[x]", color = theme.subtext, fontSize = 11.sp, modifier = Modifier.clickable {
+                            saveStickers(stickers.filterIndexed { i, _ -> i != idx })
+                        })
+                    }
+                    Text("x: ${(st.x * 100).toInt()}%", color = theme.subtext, fontSize = 10.sp)
+                    Slider(value = st.x, onValueChange = { v ->
+                        saveStickers(stickers.toMutableList().also { it[idx] = st.copy(x = v) })
+                    }, valueRange = 0f..1f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                    Text("y: ${(st.y * 100).toInt()}%", color = theme.subtext, fontSize = 10.sp)
+                    Slider(value = st.y, onValueChange = { v ->
+                        saveStickers(stickers.toMutableList().also { it[idx] = st.copy(y = v) })
+                    }, valueRange = 0f..1f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                    Text("size: ${st.size}dp", color = theme.subtext, fontSize = 10.sp)
+                    Slider(value = st.size.toFloat(), onValueChange = { v ->
+                        saveStickers(stickers.toMutableList().also { it[idx] = st.copy(size = v.toInt().coerceIn(8, 512)) })
+                    }, valueRange = 8f..512f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                    Text("opacity: ${(st.alpha * 100).toInt()}%", color = theme.subtext, fontSize = 10.sp)
+                    Slider(value = st.alpha, onValueChange = { v ->
+                        saveStickers(stickers.toMutableList().also { it[idx] = st.copy(alpha = v.coerceIn(0f, 1f)) })
+                    }, valueRange = 0f..1f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                    Text("rotation: ${st.rotation.toInt()}°", color = theme.subtext, fontSize = 10.sp)
+                    Slider(value = st.rotation, onValueChange = { v ->
+                        saveStickers(stickers.toMutableList().also { it[idx] = st.copy(rotation = v.coerceIn(-180f, 180f)) })
+                    }, valueRange = -180f..180f, colors = SliderDefaults.colors(thumbColor = theme.accent, activeTrackColor = theme.accent))
+                }
+            }
+            } else {
+                Text("fullscreen colors, images, element toggles and stickers are Custom-theme styling.", color = theme.subtext, fontSize = 11.sp)
             }
         }
 
@@ -2208,7 +2779,7 @@ fun SettingsTab(
         val uiAlpha by Prefs.uiAlpha(c).collectAsState(initial = 100)
         val fontScale by Prefs.fontScale(c).collectAsState(initial = 1f)
         val lineHeightScale by Prefs.lineHeightScale(c).collectAsState(initial = 0f)
-        val backupMsg by remember { mutableStateOf("") }
+        var backupMsg by remember { mutableStateOf("") }
         var backupText by remember { mutableStateOf("") }
         val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
             if (uri != null) {
@@ -2216,7 +2787,10 @@ fun SettingsTab(
                     try {
                         val json = Prefs.exportAll(c)
                         c.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                    } catch (_: Exception) {}
+                        withContext(Dispatchers.Main) { backupMsg = "backup exported" }
+                    } catch (_: Exception) {
+                        withContext(Dispatchers.Main) { backupMsg = "backup export failed" }
+                    }
                 }
             }
         }
@@ -2226,8 +2800,12 @@ fun SettingsTab(
                     try {
                         val text = c.contentResolver.openInputStream(uri)?.bufferedReader()?.readText() ?: ""
                         Prefs.importAll(c, text)
+                        Prefs.repairTypes(c)
                         MusicIndex.requestRescan()
-                    } catch (_: Exception) {}
+                        backupMsg = "backup restored"
+                    } catch (_: Exception) {
+                        backupMsg = "backup import failed"
+                    }
                 }
             }
         }
@@ -2238,6 +2816,7 @@ fun SettingsTab(
                 TextButton(onClick = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("[ import ]") }
                 TextButton(onClick = { scope.launch { backupText = Prefs.exportAll(c) } }) { Text("[ show json ]") }
             }
+            if (backupMsg.isNotEmpty()) Text(backupMsg, color = theme.accent, fontSize = 11.sp)
             if (backupText.isNotEmpty()) {
                 Text(backupText, color = theme.subtext, fontSize = 10.sp, maxLines = 8, overflow = TextOverflow.Ellipsis)
                 TextButton(onClick = { backupText = "" }) { Text("[ close ]") }
@@ -2326,11 +2905,11 @@ fun PlaylistsTab(theme: ThemeColors, shape: RoundedCornerShape) {
     val refresh = { names = Playlists.names(c); coversTick++ }
     val covers = remember(names, coversTick) { names.associateWith { Playlists.cover(c, it) } }
 
-    val pickCover = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    val pickCover = rememberCroppedImagePicker("playlist", 1f, theme) { path ->
         val target = coverTarget
-        if (uri != null && target != null) {
+        if (target != null) {
             scope.launch(Dispatchers.IO) {
-                val saved = Playlists.setCoverFromUri(c, target, uri)
+                val saved = Playlists.setCoverFromPath(c, target, path)
                 withContext(Dispatchers.Main) { if (saved != null) coversTick++ }
             }
         }
@@ -2424,7 +3003,7 @@ fun PlaylistsTab(theme: ThemeColors, shape: RoundedCornerShape) {
                             Text("[rename]", color = theme.accent, fontSize = 12.sp,
                                 modifier = Modifier.clickable { renameTarget = open }.padding(vertical = 4.dp))
                             Text("[change cover]", color = theme.accent, fontSize = 12.sp,
-                                modifier = Modifier.clickable { coverTarget = open; pickCover.launch(arrayOf("image/*")) }.padding(vertical = 4.dp))
+                                modifier = Modifier.clickable { coverTarget = open; pickCover() }.padding(vertical = 4.dp))
                             if (cover.isNotEmpty()) Text("[remove cover]", color = theme.subtext, fontSize = 12.sp,
                                 modifier = Modifier.clickable { Playlists.removeCover(c, open); coversTick++ }.padding(vertical = 4.dp))
                         }

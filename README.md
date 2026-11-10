@@ -21,9 +21,10 @@ this is a horrible project. it is a vibecoded mess. i am aware of this.
 i have made peace with this. (´･ω･`)
 
 it started as a prototype, got out of hand, and is now a ~~full~~ app with a
-rebrand, a version number that finally starts at 1.0, and a 1.1 that adds a
-fullscreen player and even more customization. please do not look at the
-commit history. please do look at the settings menu because i think its also a mess. (￣▽￣)ゞ
+rebrand, a version number that finally starts at 1.0, a 1.1 that added a
+fullscreen player, and a 1.2 that lets you glaze the top bar and the expanded
+player. please do not look at the commit history. please do look at the
+settings menu because i think its also a mess. (￣▽￣)ゞ
 
 if something breaks, it is probably a feature. if it works, it is definitely
 an accident. (╯°□°)╯︵ ┻━┻
@@ -43,22 +44,32 @@ an accident. (╯°□°)╯︵ ┻━┻
 - artist pages with song sorting by album, year, a-z, or length
 - artist albums sort by year, a-z, or total length
 - home screen widget with album art and playback controls
-- full backup and restore for settings, stats, playlists, covers, fonts, and images
+- full backup and restore for settings, stats, playlists, covers, fonts, and images, with preference types recorded so a restore cannot corrupt settings or crash the next launch
+- playback keeps its foreground service while paused, so pausing does not invite the task killer in
 
 ## customization (yes, all of it)
 
 wallahi you can do this (more coming soon).
 
+- start from any included theme as a base, then tweak it without rebuilding the palette by hand
 - move the top buttons to the top, bottom, left, or right
-- rename every button and give it a nerd font glyph
-- toggle nerd font icons instead of text
+- rename every button, give it a nerd font glyph, or assign it a cropped image
+- resize button images, item width/height, spacing, bar thickness, text and glyph size
+- pick a bar color, opacity, and selected-item wash; the bar auto-expands so left/right layouts never clip
 - set corner radius and border width
 - add a colorable drop shadow under every panel, with offset and opacity controls
 - give the custom theme a square replacement image that fills every panel
 - pick a custom gradient for the custom theme
 - custom background images belong to the saved custom theme, not every theme
+- theme the fullscreen player: background image/color/fit/dim, text/subtext/accent colors
+- resize the fullscreen cover and title/artist text, round the cover and play button
+- show or hide the fullscreen cover, progress, title, artist, info, controls, actions, queue, and lyrics
+- place custom stickers on the fullscreen player with position, size, opacity, and rotation
 - choose the now playing card title plus fullscreen queue and lyrics defaults
-- crop, pan, and zoom profile pictures, banners, disc icons, backgrounds, and square images
+- crop, pan, and zoom profile pictures, banners, disc icons, backgrounds, square images, playlist covers, and top-bar button images
+- save custom themes to a portable file and import them back, images included
+- shadows, fullscreen styling, top-bar styling, and shape settings travel with the theme
+- bar color/opacity, selected wash, and panel shadows are Custom-theme only; built-in themes stay exactly as designed
 - pick a tab transition: fade, cmatrix, slides, zoom, or none
 - adjust font size, line height, row padding, cover size, and panel opacity
 - install .ttf fonts from a file instead of pasting a url

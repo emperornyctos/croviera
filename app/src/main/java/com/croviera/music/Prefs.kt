@@ -74,6 +74,43 @@ object Prefs {
     private val NP_EXPANDED_COVER = intPreferencesKey("np_expanded_cover")
     private val NP_EXPANDED_QUEUE = booleanPreferencesKey("np_expanded_queue")
     private val NP_EXPANDED_LYRICS = booleanPreferencesKey("np_expanded_lyrics")
+    private val NP_BG_IMG = stringPreferencesKey("np_bg_img")
+    private val NP_BG_ALPHA = intPreferencesKey("np_bg_alpha")
+    private val NP_BG_COLOR = stringPreferencesKey("np_bg_color")
+    private val NP_TEXT_COLOR = stringPreferencesKey("np_text_color")
+    private val NP_SUBTEXT_COLOR = stringPreferencesKey("np_subtext_color")
+    private val NP_ACCENT_COLOR = stringPreferencesKey("np_accent_color")
+    private val NP_SHOW_COVER = booleanPreferencesKey("np_show_cover")
+    private val NP_SHOW_PROGRESS = booleanPreferencesKey("np_show_progress")
+    private val NP_SHOW_TITLE = booleanPreferencesKey("np_show_title")
+    private val NP_SHOW_ARTIST = booleanPreferencesKey("np_show_artist")
+    private val NP_SHOW_INFO = booleanPreferencesKey("np_show_info")
+    private val NP_SHOW_CONTROLS = booleanPreferencesKey("np_show_controls")
+    private val NP_SHOW_ACTIONS = booleanPreferencesKey("np_show_actions")
+    private val NP_SHOW_QUEUE = booleanPreferencesKey("np_show_queue")
+    private val NP_SHOW_LYRICS = booleanPreferencesKey("np_show_lyrics")
+    private val NP_MAX_WIDTH = intPreferencesKey("np_max_width")
+    private val NP_STICKERS = stringPreferencesKey("np_stickers")
+    private val NAV_BUTTON_IMAGES = stringPreferencesKey("nav_button_images")
+    private val NAV_IMAGE_SIZE = intPreferencesKey("nav_image_size")
+    private val NAV_ITEM_WIDTH = intPreferencesKey("nav_item_width")
+    private val NAV_ITEM_HEIGHT = intPreferencesKey("nav_item_height")
+    private val NAV_ITEM_SPACING = intPreferencesKey("nav_item_spacing")
+    private val NAV_PADDING = intPreferencesKey("nav_padding")
+    private val NAV_BAR_THICKNESS = intPreferencesKey("nav_bar_thickness")
+    private val NAV_BG_ALPHA = intPreferencesKey("nav_bg_alpha")
+    private val NAV_BG_COLOR = stringPreferencesKey("nav_bg_color")
+    private val NAV_IMAGE_FIT = stringPreferencesKey("nav_image_fit")
+    private val NAV_TEXT_SIZE = intPreferencesKey("nav_text_size")
+    private val NAV_NERD_SIZE = intPreferencesKey("nav_nerd_size")
+    private val NAV_SELECTED_ALPHA = intPreferencesKey("nav_selected_alpha")
+    private val NP_COVER_RADIUS = intPreferencesKey("np_cover_radius")
+    private val NP_COVER_SIZE = intPreferencesKey("np_cover_size")
+    private val NP_TITLE_SIZE = intPreferencesKey("np_title_size")
+    private val NP_ARTIST_SIZE = intPreferencesKey("np_artist_size")
+    private val NP_DIM = intPreferencesKey("np_dim")
+    private val NP_BG_FIT = stringPreferencesKey("np_bg_fit")
+    private val NP_BUTTON_RADIUS = intPreferencesKey("np_button_radius")
     // NOTE: 0f = "auto" (no explicit lineHeight applied) so the app keeps the
     // same look as 1.5.2.1 by default. Anything > 0 is treated as a multiplier.
 
@@ -100,6 +137,80 @@ object Prefs {
     fun npExpandedCover(c: Context) = c.ds.data.map { it[NP_EXPANDED_COVER] ?: 180 }
     fun npExpandedQueue(c: Context) = c.ds.data.map { it[NP_EXPANDED_QUEUE] ?: true }
     fun npExpandedLyrics(c: Context) = c.ds.data.map { it[NP_EXPANDED_LYRICS] ?: true }
+    fun npBgImg(c: Context) = c.ds.data.map { it[NP_BG_IMG] ?: "" }
+    suspend fun setNpBgImg(c: Context, v: String) = c.ds.edit { it[NP_BG_IMG] = v }
+    fun npBgAlpha(c: Context) = c.ds.data.map { it[NP_BG_ALPHA] ?: 45 }
+    suspend fun setNpBgAlpha(c: Context, v: Int) = c.ds.edit { it[NP_BG_ALPHA] = v }
+    fun npBgColor(c: Context) = c.ds.data.map { it[NP_BG_COLOR] ?: "" }
+    suspend fun setNpBgColor(c: Context, v: String) = c.ds.edit { it[NP_BG_COLOR] = v }
+    fun npTextColor(c: Context) = c.ds.data.map { it[NP_TEXT_COLOR] ?: "" }
+    suspend fun setNpTextColor(c: Context, v: String) = c.ds.edit { it[NP_TEXT_COLOR] = v }
+    fun npSubtextColor(c: Context) = c.ds.data.map { it[NP_SUBTEXT_COLOR] ?: "" }
+    suspend fun setNpSubtextColor(c: Context, v: String) = c.ds.edit { it[NP_SUBTEXT_COLOR] = v }
+    fun npAccentColor(c: Context) = c.ds.data.map { it[NP_ACCENT_COLOR] ?: "" }
+    suspend fun setNpAccentColor(c: Context, v: String) = c.ds.edit { it[NP_ACCENT_COLOR] = v }
+    fun npShowCover(c: Context) = c.ds.data.map { it[NP_SHOW_COVER] ?: true }
+    suspend fun setNpShowCover(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_COVER] = v }
+    fun npShowProgress(c: Context) = c.ds.data.map { it[NP_SHOW_PROGRESS] ?: true }
+    suspend fun setNpShowProgress(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_PROGRESS] = v }
+    fun npShowTitle(c: Context) = c.ds.data.map { it[NP_SHOW_TITLE] ?: true }
+    suspend fun setNpShowTitle(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_TITLE] = v }
+    fun npShowArtist(c: Context) = c.ds.data.map { it[NP_SHOW_ARTIST] ?: true }
+    suspend fun setNpShowArtist(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_ARTIST] = v }
+    fun npShowInfo(c: Context) = c.ds.data.map { it[NP_SHOW_INFO] ?: true }
+    suspend fun setNpShowInfo(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_INFO] = v }
+    fun npShowControls(c: Context) = c.ds.data.map { it[NP_SHOW_CONTROLS] ?: true }
+    suspend fun setNpShowControls(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_CONTROLS] = v }
+    fun npShowActions(c: Context) = c.ds.data.map { it[NP_SHOW_ACTIONS] ?: true }
+    suspend fun setNpShowActions(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_ACTIONS] = v }
+    fun npShowQueue(c: Context) = c.ds.data.map { it[NP_SHOW_QUEUE] ?: true }
+    suspend fun setNpShowQueue(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_QUEUE] = v }
+    fun npShowLyrics(c: Context) = c.ds.data.map { it[NP_SHOW_LYRICS] ?: true }
+    suspend fun setNpShowLyrics(c: Context, v: Boolean) = c.ds.edit { it[NP_SHOW_LYRICS] = v }
+    fun npMaxWidth(c: Context) = c.ds.data.map { it[NP_MAX_WIDTH] ?: 420 }
+    suspend fun setNpMaxWidth(c: Context, v: Int) = c.ds.edit { it[NP_MAX_WIDTH] = v }
+    fun npStickers(c: Context) = c.ds.data.map { it[NP_STICKERS] ?: "[]" }
+    suspend fun setNpStickers(c: Context, v: String) = c.ds.edit { it[NP_STICKERS] = v }
+    fun navButtonImages(c: Context) = c.ds.data.map { it[NAV_BUTTON_IMAGES] ?: "{}" }
+    suspend fun setNavButtonImages(c: Context, v: String) = c.ds.edit { it[NAV_BUTTON_IMAGES] = v }
+    fun navImageSize(c: Context) = c.ds.data.map { it[NAV_IMAGE_SIZE] ?: 28 }
+    suspend fun setNavImageSize(c: Context, v: Int) = c.ds.edit { it[NAV_IMAGE_SIZE] = v }
+    fun navItemWidth(c: Context) = c.ds.data.map { it[NAV_ITEM_WIDTH] ?: 0 }
+    suspend fun setNavItemWidth(c: Context, v: Int) = c.ds.edit { it[NAV_ITEM_WIDTH] = v }
+    fun navItemHeight(c: Context) = c.ds.data.map { it[NAV_ITEM_HEIGHT] ?: 0 }
+    suspend fun setNavItemHeight(c: Context, v: Int) = c.ds.edit { it[NAV_ITEM_HEIGHT] = v }
+    fun navItemSpacing(c: Context) = c.ds.data.map { it[NAV_ITEM_SPACING] ?: 2 }
+    suspend fun setNavItemSpacing(c: Context, v: Int) = c.ds.edit { it[NAV_ITEM_SPACING] = v }
+    fun navPadding(c: Context) = c.ds.data.map { it[NAV_PADDING] ?: 4 }
+    suspend fun setNavPadding(c: Context, v: Int) = c.ds.edit { it[NAV_PADDING] = v }
+    fun navBarThickness(c: Context) = c.ds.data.map { it[NAV_BAR_THICKNESS] ?: 0 }
+    suspend fun setNavBarThickness(c: Context, v: Int) = c.ds.edit { it[NAV_BAR_THICKNESS] = v }
+    fun navBgAlpha(c: Context) = c.ds.data.map { it[NAV_BG_ALPHA] ?: 94 }
+    suspend fun setNavBgAlpha(c: Context, v: Int) = c.ds.edit { it[NAV_BG_ALPHA] = v }
+    fun navBgColor(c: Context) = c.ds.data.map { it[NAV_BG_COLOR] ?: "" }
+    suspend fun setNavBgColor(c: Context, v: String) = c.ds.edit { it[NAV_BG_COLOR] = v }
+    fun navImageFit(c: Context) = c.ds.data.map { it[NAV_IMAGE_FIT] ?: "crop" }
+    suspend fun setNavImageFit(c: Context, v: String) = c.ds.edit { it[NAV_IMAGE_FIT] = v }
+    fun navTextSize(c: Context) = c.ds.data.map { it[NAV_TEXT_SIZE] ?: 14 }
+    suspend fun setNavTextSize(c: Context, v: Int) = c.ds.edit { it[NAV_TEXT_SIZE] = v }
+    fun navNerdSize(c: Context) = c.ds.data.map { it[NAV_NERD_SIZE] ?: 20 }
+    suspend fun setNavNerdSize(c: Context, v: Int) = c.ds.edit { it[NAV_NERD_SIZE] = v }
+    fun navSelectedAlpha(c: Context) = c.ds.data.map { it[NAV_SELECTED_ALPHA] ?: 14 }
+    suspend fun setNavSelectedAlpha(c: Context, v: Int) = c.ds.edit { it[NAV_SELECTED_ALPHA] = v }
+    fun npCoverRadius(c: Context) = c.ds.data.map { it[NP_COVER_RADIUS] ?: 0 }
+    suspend fun setNpCoverRadius(c: Context, v: Int) = c.ds.edit { it[NP_COVER_RADIUS] = v }
+    fun npCoverSize(c: Context) = c.ds.data.map { it[NP_COVER_SIZE] ?: 0 }
+    suspend fun setNpCoverSize(c: Context, v: Int) = c.ds.edit { it[NP_COVER_SIZE] = v }
+    fun npTitleSize(c: Context) = c.ds.data.map { it[NP_TITLE_SIZE] ?: 24 }
+    suspend fun setNpTitleSize(c: Context, v: Int) = c.ds.edit { it[NP_TITLE_SIZE] = v }
+    fun npArtistSize(c: Context) = c.ds.data.map { it[NP_ARTIST_SIZE] ?: 15 }
+    suspend fun setNpArtistSize(c: Context, v: Int) = c.ds.edit { it[NP_ARTIST_SIZE] = v }
+    fun npDim(c: Context) = c.ds.data.map { it[NP_DIM] ?: 0 }
+    suspend fun setNpDim(c: Context, v: Int) = c.ds.edit { it[NP_DIM] = v }
+    fun npBgFit(c: Context) = c.ds.data.map { it[NP_BG_FIT] ?: "crop" }
+    suspend fun setNpBgFit(c: Context, v: String) = c.ds.edit { it[NP_BG_FIT] = v }
+    fun npButtonRadius(c: Context) = c.ds.data.map { it[NP_BUTTON_RADIUS] ?: 18 }
+    suspend fun setNpButtonRadius(c: Context, v: Int) = c.ds.edit { it[NP_BUTTON_RADIUS] = v }
     fun welcome(c: Context) = c.ds.data.map { it[WELCOME] ?: "Welcome back." }
     fun profileName(c: Context) = c.ds.data.map { it[PROFILE_NAME] ?: "listener" }
     fun profilePic(c: Context) = c.ds.data.map { it[PROFILE_PIC] ?: "" }
@@ -191,6 +302,7 @@ object Prefs {
         val profileName: String = "listener",
         val profilePic: String = "",
         val onboarded: Boolean = false,
+        val keepScreenOn: Boolean = true,
         val cornerSize: Int = 0,
         val borderWidth: Int = 1,
         val navPosition: String = "top",
@@ -202,9 +314,47 @@ object Prefs {
         val npExpandedCover: Int = 180,
         val npExpandedQueue: Boolean = true,
         val npExpandedLyrics: Boolean = true,
+        val npBgImg: String = "",
+        val npBgAlpha: Int = 45,
+        val npBgColor: String = "",
+        val npTextColor: String = "",
+        val npSubtextColor: String = "",
+        val npAccentColor: String = "",
+        val npShowCover: Boolean = true,
+        val npShowProgress: Boolean = true,
+        val npShowTitle: Boolean = true,
+        val npShowArtist: Boolean = true,
+        val npShowInfo: Boolean = true,
+        val npShowControls: Boolean = true,
+        val npShowActions: Boolean = true,
+        val npShowQueue: Boolean = true,
+        val npShowLyrics: Boolean = true,
+        val npMaxWidth: Int = 420,
+        val npStickers: String = "[]",
+        val navButtonImages: String = "{}",
+        val navImageSize: Int = 28,
+        val navItemWidth: Int = 0,
+        val navItemHeight: Int = 0,
+        val navItemSpacing: Int = 2,
+        val navPadding: Int = 4,
+        val navBarThickness: Int = 0,
+        val navBgAlpha: Int = 94,
+        val navBgColor: String = "",
+        val navImageFit: String = "crop",
+        val navTextSize: Int = 14,
+        val navNerdSize: Int = 20,
+        val navSelectedAlpha: Int = 14,
+        val npCoverRadius: Int = 0,
+        val npCoverSize: Int = 0,
+        val npTitleSize: Int = 24,
+        val npArtistSize: Int = 15,
+        val npDim: Int = 0,
+        val npBgFit: String = "crop",
+        val npButtonRadius: Int = 18,
         val gradient: GradientPrefs = GradientPrefs("", "", 135),
         val squareImg: String = "",
         val squareImgAlpha: Int = 35,
+        val customDisc: String = "",
         val panelShadow: Boolean = false,
         val panelShadowColor: String = "#8A1F2D",
         val panelShadowOffset: Int = 4,
@@ -213,6 +363,7 @@ object Prefs {
 
     /** Read the first DataStore value set so the UI never flashes defaults on launch/rotation. */
     suspend fun snapshot(c: Context): Snapshot {
+        repairTypes(c)
         val p = c.ds.data.first()
         return Snapshot(
             theme = p[THEME] ?: "Croviera",
@@ -229,6 +380,7 @@ object Prefs {
             profileName = p[PROFILE_NAME] ?: "listener",
             profilePic = p[PROFILE_PIC] ?: "",
             onboarded = p[ONBOARDED] ?: false,
+            keepScreenOn = p[KEEP_SCREEN_ON] ?: true,
             cornerSize = p[CORNER_SIZE] ?: 0,
             borderWidth = p[BORDER_WIDTH] ?: 1,
             navPosition = p[NAV_POSITION] ?: "top",
@@ -240,9 +392,47 @@ object Prefs {
             npExpandedCover = p[NP_EXPANDED_COVER] ?: 180,
             npExpandedQueue = p[NP_EXPANDED_QUEUE] ?: true,
             npExpandedLyrics = p[NP_EXPANDED_LYRICS] ?: true,
+            npBgImg = p[NP_BG_IMG] ?: "",
+            npBgAlpha = p[NP_BG_ALPHA] ?: 45,
+            npBgColor = p[NP_BG_COLOR] ?: "",
+            npTextColor = p[NP_TEXT_COLOR] ?: "",
+            npSubtextColor = p[NP_SUBTEXT_COLOR] ?: "",
+            npAccentColor = p[NP_ACCENT_COLOR] ?: "",
+            npShowCover = p[NP_SHOW_COVER] ?: true,
+            npShowProgress = p[NP_SHOW_PROGRESS] ?: true,
+            npShowTitle = p[NP_SHOW_TITLE] ?: true,
+            npShowArtist = p[NP_SHOW_ARTIST] ?: true,
+            npShowInfo = p[NP_SHOW_INFO] ?: true,
+            npShowControls = p[NP_SHOW_CONTROLS] ?: true,
+            npShowActions = p[NP_SHOW_ACTIONS] ?: true,
+            npShowQueue = p[NP_SHOW_QUEUE] ?: true,
+            npShowLyrics = p[NP_SHOW_LYRICS] ?: true,
+            npMaxWidth = p[NP_MAX_WIDTH] ?: 420,
+            npStickers = p[NP_STICKERS] ?: "[]",
+            navButtonImages = p[NAV_BUTTON_IMAGES] ?: "{}",
+            navImageSize = p[NAV_IMAGE_SIZE] ?: 28,
+            navItemWidth = p[NAV_ITEM_WIDTH] ?: 0,
+            navItemHeight = p[NAV_ITEM_HEIGHT] ?: 0,
+            navItemSpacing = p[NAV_ITEM_SPACING] ?: 2,
+            navPadding = p[NAV_PADDING] ?: 4,
+            navBarThickness = p[NAV_BAR_THICKNESS] ?: 0,
+            navBgAlpha = p[NAV_BG_ALPHA] ?: 94,
+            navBgColor = p[NAV_BG_COLOR] ?: "",
+            navImageFit = p[NAV_IMAGE_FIT] ?: "crop",
+            navTextSize = p[NAV_TEXT_SIZE] ?: 14,
+            navNerdSize = p[NAV_NERD_SIZE] ?: 20,
+            navSelectedAlpha = p[NAV_SELECTED_ALPHA] ?: 14,
+            npCoverRadius = p[NP_COVER_RADIUS] ?: 0,
+            npCoverSize = p[NP_COVER_SIZE] ?: 0,
+            npTitleSize = p[NP_TITLE_SIZE] ?: 24,
+            npArtistSize = p[NP_ARTIST_SIZE] ?: 15,
+            npDim = p[NP_DIM] ?: 0,
+            npBgFit = p[NP_BG_FIT] ?: "crop",
+            npButtonRadius = p[NP_BUTTON_RADIUS] ?: 18,
             gradient = GradientPrefs(p[CUSTOM_GRADIENT_START] ?: "", p[CUSTOM_GRADIENT_END] ?: "", p[CUSTOM_GRADIENT_ANGLE] ?: 135),
             squareImg = p[CUSTOM_SQUARE_IMG] ?: "",
             squareImgAlpha = p[SQUARE_IMG_ALPHA] ?: 35,
+            customDisc = p[CUSTOM_DISC] ?: "",
             panelShadow = p[PANEL_SHADOW] ?: false,
             panelShadowColor = p[PANEL_SHADOW_COLOR] ?: "#8A1F2D",
             panelShadowOffset = p[PANEL_SHADOW_OFFSET] ?: 4,
@@ -254,20 +444,25 @@ object Prefs {
     suspend fun exportAll(c: Context): String {
         val prefs = c.ds.data.first().asMap()
         val obj = org.json.JSONObject()
-        obj.put("_version", 1)
+        obj.put("_version", 2)
         val p = org.json.JSONObject()
+        // JSON cannot distinguish 1.0 from 1, so record the original DataStore
+        // type of every preference. Without this, restoring a whole-number
+        // Float under an Int key makes the next launch crash with a cast error.
+        val types = org.json.JSONObject()
         for ((key, v) in prefs) {
             val k = key.name
             when (v) {
-                is String -> p.put(k, v)
-                is Int -> p.put(k, v)
-                is Long -> p.put(k, v)
-                is Float -> p.put(k, v.toDouble())
-                is Boolean -> p.put(k, v)
+                is String -> { p.put(k, v); types.put(k, "string") }
+                is Int -> { p.put(k, v); types.put(k, "int") }
+                is Long -> { p.put(k, v); types.put(k, "long") }
+                is Float -> { p.put(k, v.toDouble()); types.put(k, "float") }
+                is Boolean -> { p.put(k, v); types.put(k, "boolean") }
                 else -> {}
             }
         }
         obj.put("prefs", p)
+        obj.put("_types", types)
         val stats = File(c.filesDir, "stats.json")
         if (stats.exists()) obj.put("stats", stats.readText())
         val pls = File(c.filesDir, "playlists.json")
@@ -347,20 +542,72 @@ object Prefs {
         // Restore prefs last so image/font files already exist when the UI
         // recomposes and Coil tries to load the restored paths.
         obj.optJSONObject("prefs")?.let { p ->
+            val types = obj.optJSONObject("_types")
             c.ds.edit { prefs ->
                 p.keys().forEach { k ->
-                    when (val v = p.opt(k)) {
-                        is String -> prefs[stringPreferencesKey(k)] = v
-                        is Boolean -> prefs[booleanPreferencesKey(k)] = v
-                        is Int -> prefs[intPreferencesKey(k)] = v
-                        is Long -> prefs[longPreferencesKey(k)] = v
-                        is Double -> prefs[floatPreferencesKey(k)] = v.toFloat()
-                        else -> {}
+                    val v = p.opt(k)
+                    if (v == null || v == org.json.JSONObject.NULL) return@forEach
+                    val type = types?.optString(k, "").orEmpty().ifBlank { inferredType(k, v) }
+                    when (type) {
+                        "string" -> prefs[stringPreferencesKey(k)] = v.toString()
+                        "boolean" -> prefs[booleanPreferencesKey(k)] = when (v) {
+                            is Boolean -> v
+                            is String -> v.equals("true", true)
+                            is Number -> v.toInt() != 0
+                            else -> false
+                        }
+                        "int" -> if (v is Number) prefs[intPreferencesKey(k)] = v.toInt()
+                        "long" -> if (v is Number) prefs[longPreferencesKey(k)] = v.toLong()
+                        "float" -> when (v) {
+                            is Number -> prefs[floatPreferencesKey(k)] = v.toFloat()
+                            is String -> v.toFloatOrNull()?.let { prefs[floatPreferencesKey(k)] = it }
+                        }
                     }
                 }
             }
         }
+        // Old backups (and old backups restored by old builds) can still carry
+        // an Int where the app expects a Float. Heal them before the UI reads.
+        repairTypes(c)
     }
+
+    private val FLOAT_KEYS = setOf("font_scale", "line_height_scale")
+
+    private fun inferredType(key: String, v: Any?): String = when {
+        key in FLOAT_KEYS -> "float"
+        v is String -> "string"
+        v is Boolean -> "boolean"
+        v is Int -> "int"
+        v is Long -> "long"
+        v is Double || v is Float -> "float"
+        else -> ""
+    }
+
+    /**
+     * Repairs prefs written by 1.0/1.1 backup restore: JSON serialized
+     * whole-number floats as ints, which makes typed DataStore reads throw and
+     * closes the app on every launch until its data is cleared.
+     */
+    suspend fun repairTypes(c: Context) {
+        val raw = c.ds.data.first().asMap()
+        val fixes = raw.mapNotNull { (key, value) ->
+            if (key.name in FLOAT_KEYS && value !is Float) {
+                key.name to when (value) {
+                    is Number -> value.toFloat()
+                    is String -> value.toFloatOrNull() ?: 0f
+                    else -> 0f
+                }
+            } else null
+        }
+        if (fixes.isEmpty()) return
+        c.ds.edit { prefs ->
+            fixes.forEach { (name, value) ->
+                prefs.remove(stringPreferencesKey(name))
+                prefs[floatPreferencesKey(name)] = value
+            }
+        }
+    }
+
     suspend fun setWelcome(c: Context, v: String) = c.ds.edit { it[WELCOME] = v }
     suspend fun setProfileName(c: Context, v: String) = c.ds.edit { it[PROFILE_NAME] = v }
     suspend fun setProfilePic(c: Context, v: String) = c.ds.edit { it[PROFILE_PIC] = v }

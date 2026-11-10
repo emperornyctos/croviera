@@ -55,7 +55,7 @@ class MusicWidget : GlanceAppWidget() {
         val title = Playback.title.value.ifEmpty { "Not playing" }
         val artist = Playback.artist.value
         val playing = Playback.playing.value
-        val albumArtBitmap = Playback.queue.value.getOrNull(Playback.player?.currentMediaItemIndex ?: 0)?.let { song ->
+        val albumArtBitmap = Playback.queue.value.getOrNull(Playback.index.value)?.let { song ->
             try {
                 val stream = context.contentResolver.openInputStream(albumArtUri(song))
                 val bmp = android.graphics.BitmapFactory.decodeStream(stream)

@@ -119,6 +119,25 @@ object Playlists {
         }
     }
 
+    /** Adopt an already-cropped local image (file:// URI) as the playlist cover. */
+    fun setCoverFromPath(c: Context, name: String, path: String): String? {
+        if (!load(c).has(name)) return null
+        return try {
+            val src = File(Uri.parse(path).path ?: path)
+            if (!src.exists() || src.length() == 0L) return null
+            val dir = File(c.filesDir, "playlist_covers").apply { mkdirs() }
+            val ext = src.extension.takeIf { it.isNotBlank() }?.let { ".$it" } ?: ".png"
+            val file = File.createTempFile("cover_", ext, dir)
+            src.copyTo(file, overwrite = true)
+            val old = loadCovers(c).optString(name, "")
+            setCover(c, name, file.name)
+            if (old.isNotEmpty()) deleteCoverFile(c, old)
+            file.name
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     fun setCover(c: Context, name: String, fileName: String) {
         val j = loadCovers(c)
         j.put(name, fileName)
